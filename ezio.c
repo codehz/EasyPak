@@ -201,20 +201,23 @@ err:
 
 typedef struct fd_chain {
   int fd;
+  uint16_t mode;
   struct fd_chain *last;
 } fd_chain;
 
 fd_chain *mkfd_chain(int fd) {
   fd_chain *ret = malloc(sizeof(fd_chain));
   ret->fd = fd;
+  ret->mode = 0755;
   ret->last = NULL;
   return ret;
 }
 
-fd_chain *fd_push(fd_chain *chain, char const *dir) {
+fd_chain *fd_push(fd_chain *chain, char const *dir, uint16_t mode) {
   int nfd = checked_openat(chain->fd, dir, O_DIRECTORY);
   fd_chain *ret = malloc(sizeof(fd_chain));
   ret->fd = nfd;
+  ret->mode = mode;
   ret->last = chain;
   return ret;
 err:
@@ -222,10 +225,13 @@ err:
 }
 
 fd_chain *fd_pop(fd_chain *chain) {
+  checked_fchmod(chain->fd, chain->mode);
   close(chain->fd);
   fd_chain *last = chain->last;
   free(chain);
   return last;
+err:
+  return NULL;
 }
 
 int fd_chain_pad(fd_chain *chain) {
@@ -235,6 +241,13 @@ int fd_chain_pad(fd_chain *chain) {
     chain = chain->last;
   }
   return len * PAD;
+}
+
+void fd_chain_free(fd_chain *chain) {
+  if (chain == NULL)
+    return;
+  close(chain->fd);
+  fd_chain_free(chain->last);
 }
 
 EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
@@ -286,14 +299,15 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     char const *key = va_arg(list, char const *);
     uint16_t mode = va_arg(list, int);
     printf("d%s %*s%s\n", printMode(mode), fd_chain_pad(chain), "", key);
-    checked_mkdirat(chain->fd, key, mode);
-    fd_chain *n = fd_push(chain, key);
+    checked_mkdirat(chain->fd, key, 0777);
+    fd_chain *n = fd_push(chain, key, mode);
     if (!n)
       goto err;
     *pchain = n;
     break;
   }
   case EZ_T_POP: {
+    uint16_t mode = 0755;
     fd_chain *n = fd_pop(chain);
     if (!n)
       goto corrupt;
@@ -384,6 +398,7 @@ EZ_RET list_callback(void *user, EZ_TYPE type, ...) {
 
 int main(int argc, char *argv[]) {
   FILE *arch = NULL;
+  fd_chain *chain = NULL;
   EZ_RET ret;
   if (argc <= 2)
     goto err_args;
@@ -402,11 +417,9 @@ int main(int argc, char *argv[]) {
     arch = checked_fopen(argv[2], "rb");
     checked_mkdir(argv[3], 0755);
     int dir = checked_open(argv[3], O_DIRECTORY);
-    fd_chain *chain = mkfd_chain(dir);
-    void *copied = chain;
-    check_err(ez_unpack(arch, true, my_callback, &copied));
-    free(chain);
-    close(dir);
+    chain = mkfd_chain(dir);
+    check_err(ez_unpack(arch, true, my_callback, &chain));
+    fd_chain_free(chain);
   } else if (strcmp(argv[1], "test") == 0) {
     if (argc != 3)
       goto err_args;
@@ -419,6 +432,7 @@ int main(int argc, char *argv[]) {
 err_args:
   errx(1, "%s (pack|unpack|test) pack dir", argv[0]);
 err:
+  fd_chain_free(chain);
   if (arch)
     fclose(arch);
   fprintf(stderr, "%s\n", ez_error_string(ret));
