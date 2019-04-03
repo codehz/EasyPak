@@ -336,7 +336,8 @@ EZ_RET list_callback_v(void *user, EZ_TYPE type, va_list list) {
     uint16_t mode = va_arg(list, int);
     char const *content = va_arg(list, char const *);
     uint64_t size = va_arg(list, uint64_t);
-    printf("-%s %*s%s (%s)\n", printMode(mode), *level * PAD, "", key, readable_fs(size));
+    printf("-%s %*s%s (%s)\n", printMode(mode), *level * PAD, "", key,
+           readable_fs(size));
     break;
   }
   case EZ_T_SENDFILE: {
@@ -345,7 +346,8 @@ EZ_RET list_callback_v(void *user, EZ_TYPE type, va_list list) {
     int sfd = va_arg(list, int);
     off_t *off = va_arg(list, off_t *);
     size_t size = va_arg(list, size_t);
-    printf("-%s %*s%s (%s)\n", printMode(mode), *level * PAD, "", key, readable_fs(size));
+    printf("-%s %*s%s (%s)\n", printMode(mode), *level * PAD, "", key,
+           readable_fs(size));
     break;
   }
   case EZ_T_LNK: {
@@ -382,6 +384,7 @@ EZ_RET list_callback(void *user, EZ_TYPE type, ...) {
 
 int main(int argc, char *argv[]) {
   FILE *arch = NULL;
+  EZ_RET ret;
   if (argc <= 2)
     goto err_args;
   if (strcmp(argv[1], "pack") == 0) {
@@ -389,9 +392,9 @@ int main(int argc, char *argv[]) {
       goto err_args;
     arch = checked_fopen(argv[2], "wb");
     int dir = checked_open(argv[3], O_DIRECTORY);
-    ez_begin(arch);
-    pack_iterator(arch, dir, 0);
-    ez_end(arch);
+    check_err(ez_begin(arch));
+    check_err(pack_iterator(arch, dir, 0));
+    check_err(ez_end(arch));
     fclose(arch);
   } else if (strcmp(argv[1], "unpack") == 0) {
     if (argc != 4)
@@ -401,18 +404,15 @@ int main(int argc, char *argv[]) {
     int dir = checked_open(argv[3], O_DIRECTORY);
     fd_chain *chain = mkfd_chain(dir);
     void *copied = chain;
-    int ret = ez_unpack(arch, true, my_callback, &copied);
+    check_err(ez_unpack(arch, true, my_callback, &copied));
     free(chain);
     close(dir);
-    if (ret != EZ_OK) {
-      printf("%d\n", ret);
-    }
   } else if (strcmp(argv[1], "test") == 0) {
     if (argc != 3)
       goto err_args;
     arch = checked_fopen(argv[2], "rb");
     int level = 0;
-    ez_unpack(arch, true, list_callback, &level);
+    check_err(ez_unpack(arch, true, list_callback, &level));
   } else
     goto err_args;
   return 0;
@@ -421,5 +421,6 @@ err_args:
 err:
   if (arch)
     fclose(arch);
-  return 2;
+  fprintf(stderr, "%s\n", ez_error_string(ret));
+  return ret ?: -1;
 }

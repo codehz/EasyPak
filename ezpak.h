@@ -56,3 +56,5 @@ EZ_RET ez_send_file(FILE *file, char const *key, int16_t mode, int fd,
 typedef EZ_RET (*ez_callback)(void *user, EZ_TYPE type, ...);
 
 EZ_RET ez_unpack(FILE *file, bool use_fd, ez_callback callback, void *arg);
+
+char const *ez_error_string(EZ_RET value);

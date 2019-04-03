@@ -242,3 +242,31 @@ EZ_RET ez_unpack(FILE *file, bool use_fd, ez_callback callback, void *arg) {
   }
   return EZ_ERROR_CORRUPT;
 }
+
+char const *ez_error_string(EZ_RET value) {
+  switch (value) {
+  case EZ_OK:
+    return "OK";
+  case EZ_ERROR_SYSCALL:
+    return "Syscall error";
+  case EZ_ERROR_NOT_IMPL:
+    return "Function is not implemented";
+  case EZ_ERROR_MAGIC:
+    return "Magic number is not matched";
+  case EZ_ERROR_CORRUPT:
+    return "File is corrupted or unreadable";
+  default:
+    if (value & EZ_ERROR_CALLBACK)
+      switch (value & !EZ_ERROR_CALLBACK) {
+      case EZ_ERROR_SYSCALL:
+        return "Callback error: Syscall error";
+      case EZ_ERROR_NOT_IMPL:
+        return "Callback error: Function is not implemented";
+      case EZ_ERROR_MAGIC:
+        return "Callback error: Magic number is not matched";
+      case EZ_ERROR_CORRUPT:
+        return "Callback error: File is corrupted or unreadable";
+      }
+    return "Unknown error";
+  }
+}
