@@ -175,7 +175,7 @@ EZ_RET ez_send_file(FILE *file, char const *key, int16_t mode, int fd,
                     off_t *off, uint64_t length) {
   size_t keylen = strlen(key), len = length ?: checked_lseek(fd, 0, SEEK_END);
   assert(keylen != 0);
-  ez_block block = {.type = EZ_T_LNK, .mode = 0, .len = keylen + len + 1};
+  ez_block block = {.type = EZ_T_REG, .mode = mode, .len = keylen + len + 1};
   checked_write(&block, sizeof(ez_block), file);
   checked_write(key, keylen + 1, file);
   fflush(file);
@@ -193,18 +193,19 @@ EZ_RET ez_send_file(FILE *file, char const *key, int16_t mode, int fd,
 EZ_RET ez_unpack(FILE *file, bool use_fd, ez_callback callback, void *arg) {
   // check magic
   char magic[4];
-  char *key_buffer, *val_buffer;
-  size_t key_len, val_len;
-  ssize_t slen;
-  size_t size;
+  char *key_buffer = NULL, *val_buffer = NULL;
+  size_t key_len = 0, val_len = 0;
+  ssize_t slen = 0;
+  size_t size = 0;
   checked_read(magic, 4, file);
-  if (memcpy(magic, "EZPK", 4) != 0)
+  if (memcmp(magic, "EZPK", 4) != 0)
     return EZ_ERROR_MAGIC;
   while (1) {
     ez_block block;
     checked_read(&block, sizeof(block), file);
     switch (block.type) {
     case EZ_T_END:
+      checked_callback(arg, block.type);
       return EZ_OK;
     case EZ_T_LNK:
     case EZ_T_MAN:
@@ -214,10 +215,13 @@ EZ_RET ez_unpack(FILE *file, bool use_fd, ez_callback callback, void *arg) {
       break;
     case EZ_T_REG:
       slen = checked_getdelim(&key_buffer, &key_len, 0, file);
-      size = block.len - slen - 1;
+      size = block.len - slen;
       if (use_fd) {
+        off_t cur = ftello(file);
+        off_t copied = cur;
         checked_callback(arg, EZ_T_SENDFILE, key_buffer, block.mode,
-                         fileno(file), ftello(file), size);
+                         fileno(file), &copied, size);
+        fseek(file, cur + size, SEEK_SET);
       } else {
         char *temp = (char *)malloc(size);
         checked_read(temp, size, file);
