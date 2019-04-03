@@ -17,40 +17,50 @@ typedef struct ez_block ez_block;
 #define checked_read(ptr, size, stream)                                        \
   ({                                                                           \
     int ret = fread(ptr, size, 1, stream);                                     \
-    if (ret != size)                                                           \
+    if (ret != 1) {                                                            \
+      perror("fread");                                                         \
       return EZ_ERROR_SYSCALL;                                                 \
+    }                                                                          \
     ret;                                                                       \
   })
 
 #define checked_getdelim(ptr, size, delim, stream)                             \
   ({                                                                           \
     ssize_t ret = getdelim(ptr, size, delim, stream);                          \
-    if (ret == -1)                                                             \
+    if (ret == -1) {                                                           \
+      perror("getdelim");                                                      \
       return EZ_ERROR_SYSCALL;                                                 \
+    }                                                                          \
     ret;                                                                       \
   })
 
 #define checked_write(ptr, size, stream)                                       \
   ({                                                                           \
     int ret = fwrite(ptr, size, 1, stream);                                    \
-    if (ret != size)                                                           \
+    if (ret != 1) {                                                            \
+      perror("fwrite");                                                        \
       return EZ_ERROR_SYSCALL;                                                 \
+    }                                                                          \
     ret;                                                                       \
   })
 
 #define checked_lseek(fd, off, wh)                                             \
   ({                                                                           \
     off_t ret = lseek(fd, off, wh);                                            \
-    if (ret == -1)                                                             \
+    if (ret == -1) {                                                           \
+      perror("lseek");                                                         \
       return EZ_ERROR_SYSCALL;                                                 \
+    }                                                                          \
     ret;                                                                       \
   })
 
 #define checked_sendfile(out_fd, in_fd, offset, count)                         \
   ({                                                                           \
     ssize_t ret = sendfile(out_fd, in_fd, offset, count);                      \
-    if (ret == -1)                                                             \
+    if (ret == -1) {                                                           \
+      perror("sendfile");                                                      \
       return EZ_ERROR_SYSCALL;                                                 \
+    }                                                                          \
     ret;                                                                       \
   })
 
@@ -61,6 +71,12 @@ EZ_RET ez_begin(FILE *file) {
 
 EZ_RET ez_end(FILE *file) {
   ez_block block = {.type = EZ_T_END, .mode = 0, .len = 0};
+  checked_write(&block, sizeof(ez_block), file);
+  return EZ_OK;
+}
+
+EZ_RET ez_pop(FILE *file) {
+  ez_block block = {.type = EZ_T_POP, .mode = 0, .len = 0};
   checked_write(&block, sizeof(ez_block), file);
   return EZ_OK;
 }
@@ -139,6 +155,9 @@ EZ_RET ez_push_v(FILE *file, enum EZ_TYPE type, va_list list) {
     uint16_t mode = va_arg(list, int);
     return ez_push_folder(file, key, mode);
   }
+  case EZ_T_POP: {
+    return ez_pop(file);
+  }
   case EZ_T_SENDFILE: {
     char const *key = va_arg(list, char const *);
     uint16_t mode = va_arg(list, int);
@@ -155,7 +174,7 @@ EZ_RET ez_push_v(FILE *file, enum EZ_TYPE type, va_list list) {
 EZ_RET ez_send_file(FILE *file, char const *key, int16_t mode, int fd,
                     off_t *off, uint64_t length) {
   size_t keylen = strlen(key), len = length ?: checked_lseek(fd, 0, SEEK_END);
-  assert(keylen != 0 && len != 0);
+  assert(keylen != 0);
   ez_block block = {.type = EZ_T_LNK, .mode = 0, .len = keylen + len + 1};
   checked_write(&block, sizeof(ez_block), file);
   checked_write(key, keylen + 1, file);
@@ -210,6 +229,11 @@ EZ_RET ez_unpack(FILE *file, bool use_fd, ez_callback callback, void *arg) {
       checked_getdelim(&key_buffer, &key_len, 0, file);
       checked_callback(arg, block.type, key_buffer, block.mode);
       break;
+    case EZ_T_POP:
+      checked_callback(arg, block.type);
+      break;
+    default:
+      return EZ_ERROR_CORRUPT;
     }
   }
   return EZ_ERROR_CORRUPT;

@@ -16,6 +16,8 @@ typedef enum EZ_TYPE {
   EZ_T_LNK = 3,
   // Folder
   EZ_T_DIR = 4,
+  // Back
+  EZ_T_POP = 5,
 } EZ_TYPE;
 
 #define EZ_T_SENDFILE 0x100
@@ -33,10 +35,12 @@ EZ_RET ez_begin(FILE *file);
 
 EZ_RET ez_end(FILE *file);
 
+EZ_RET ez_pop(FILE *file);
+
 EZ_RET ez_manifest(FILE *file, char const *key, char const *value);
 
 EZ_RET ez_push_file(FILE *file, char const *key, int16_t mode,
-                         char const *content, uint64_t length);
+                    char const *content, uint64_t length);
 
 EZ_RET ez_push_folder(FILE *file, char const *key, int16_t mode);
 
@@ -47,7 +51,7 @@ EZ_RET ez_push(FILE *file, EZ_TYPE type, ...);
 EZ_RET ez_push_v(FILE *file, EZ_TYPE type, va_list list);
 
 EZ_RET ez_send_file(FILE *file, char const *key, int16_t mode, int fd,
-                         off_t *off, uint64_t length);
+                    off_t *off, uint64_t length);
 
 typedef EZ_RET (*ez_callback)(void *user, EZ_TYPE type, ...);
 
