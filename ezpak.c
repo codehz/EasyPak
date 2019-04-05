@@ -18,7 +18,8 @@ typedef struct ez_block ez_block;
   ({                                                                           \
     int ret = fread(ptr, size, 1, stream);                                     \
     if (ret != 1) {                                                            \
-      perror("fread");                                                         \
+      fprintf(stderr, "fread: %s\n",                                           \
+              ferror(stream) ? "Unknown error" : "EOF");                       \
       return EZ_ERROR_SYSCALL;                                                 \
     }                                                                          \
     ret;                                                                       \
@@ -83,7 +84,7 @@ EZ_RET ez_pop(FILE *file) {
 
 EZ_RET ez_manifest(FILE *file, char const *key, char const *value) {
   size_t keylen = strlen(key), vallen = strlen(value);
-  assert(keylen != 0 && vallen != 0);
+  assert(keylen != 0);
   ez_block block = {.type = EZ_T_MAN, .mode = 0, .len = keylen + vallen + 2};
   checked_write(&block, sizeof(ez_block), file);
   checked_write(key, keylen + 1, file);

@@ -1,8 +1,9 @@
 #define _GNU_SOURCE
 
 #include "ezpak.h"
+#include "payload.h"
+#include "parse_arg.h"
 #include <assert.h>
-#include <elf.h>
 #include <fcntl.h>
 #include <sched.h>
 #include <stdio.h>
@@ -11,14 +12,10 @@
 #include <sys/mount.h>
 #include <sys/sendfile.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <unistd.h>
-#include <wordexp.h>
 
-#if defined(__LP64__)
-#define XELF Elf64_Ehdr
-#else
-#define XELF Elf32_Ehdr
-#endif
+#define pivot_root(new_root, put_old) syscall(SYS_pivot_root, new_root, put_old)
 
 #define checked_fopen(path, ...)                                               \
   ({                                                                           \
@@ -55,6 +52,16 @@
     int ret = fputs(str, stream);                                              \
     if (ret < 0) {                                                             \
       perror("fputs");                                                         \
+      return EZ_ERROR_SYSCALL;                                                 \
+    }                                                                          \
+    ret;                                                                       \
+  })
+
+#define checked_write(fd, buf, count)                                          \
+  ({                                                                           \
+    int ret = write(fd, buf, count);                                           \
+    if (ret == -1) {                                                           \
+      perror("write");                                                         \
       return EZ_ERROR_SYSCALL;                                                 \
     }                                                                          \
     ret;                                                                       \
@@ -118,10 +125,18 @@
     }                                                                          \
   })
 
-#define checked_wordexp(s, p, flags)                                           \
+#define checked_chroot(path)                                                   \
   ({                                                                           \
-    if (wordexp(s, p, flags) != 0) {                                           \
-      perror("wordexp");                                                       \
+    if (chroot(path) != 0) {                                                   \
+      perror("chroot");                                                        \
+      goto err;                                                                \
+    }                                                                          \
+  })
+
+#define checked_pivot_root(new_root, putold)                                   \
+  ({                                                                           \
+    if (pivot_root(new_root, putold) != 0) {                                   \
+      perror("pivot_root");                                                    \
       goto err;                                                                \
     }                                                                          \
   })
@@ -144,38 +159,57 @@ typedef struct pkstatus {
 #define STREQ(a, b) (strcmp(a, b) == 0)
 
 EZ_RET deny_to_setgroups() {
-  FILE *file = NULL;
-  file = checked_fopen("/proc/self/setgroups", "w");
-  checked_fputs("deny", file);
-  fclose(file);
+  int fd = -1;
+  fd = checked_open("/proc/self/setgroups", O_WRONLY);
+  checked_write(fd, "deny", 4);
+  close(fd);
   return EZ_OK;
 err:
-  if (file)
-    fclose(file);
+  if (fd != -1)
+    close(fd);
   return EZ_ERROR_SYSCALL;
 }
 
 EZ_RET map_to_root(int id, char const *filename) {
-  FILE *file = NULL;
-  file = checked_fopen(filename, "w");
-  if (fprintf(file, "0 %d 1", id) != 1) {
-    perror("fprintf");
+  int fd = -1;
+  char temp[256];
+  snprintf(temp, 256, "0 %d 1", id);
+  fd = checked_open(filename, O_WRONLY);
+  if (write(fd, temp, strlen(temp)) < 0) {
+    perror("write");
     goto err;
   }
-  fclose(file);
+  close(fd);
   return EZ_OK;
 err:
-  if (file)
-    fclose(file);
+  if (fd != -1)
+    close(fd);
   return EZ_ERROR_SYSCALL;
+}
+
+static void mkdir_p(const char *dir) {
+  char tmp[FILENAME_MAX];
+  char *p = NULL;
+  size_t len;
+
+  snprintf(tmp, sizeof(tmp), "%s", dir);
+  len = strlen(tmp);
+  if (tmp[len - 1] == '/')
+    tmp[len - 1] = 0;
+  for (p = tmp + 1; *p; p++)
+    if (*p == '/') {
+      *p = 0;
+      mkdir(tmp, 0755);
+      *p = '/';
+    }
+  mkdir(tmp, 0755);
 }
 
 static char **g_argv;
 
-EZ_RET list_callback_v(void *user, EZ_TYPE type, va_list list) {
+EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
   pkstatus *status = user;
   char *buffer = NULL;
-  wordexp_t exp = {0};
   int fd = -1;
   switch (type) {
   case EZ_T_MAN: {
@@ -197,14 +231,26 @@ EZ_RET list_callback_v(void *user, EZ_TYPE type, va_list list) {
         status->overwrite_file = mode;
       } else {
         fprintf(stderr, "unsupported strategy: %s\n", val);
+        return EZ_ERROR_CORRUPT;
       }
     } else if (STREQ(key, "chdir")) {
-      if (val[0] == '~' && (val[1] == '/' || val[1] == 0)) {
-        asprintf(&buffer, "%s%s", getenv("HOME"), val + 1);
-        checked_chdir(buffer);
-        free(buffer);
+      mkdir_p(val);
+      checked_chdir(val);
+    } else if (STREQ(key, "mkdir")) {
+      mkdir_p(val);
+    } else if (STREQ(key, "mktmpfs")) {
+      if (access(val, F_OK) != 0)
+        mkdir_p(val);
+      checked_mount("tmpfs", val, "tmpfs", 0, NULL);
+    } else if (STREQ(key, "chroot")) {
+      checked_chroot(val);
+    } else if (STREQ(key, "pivot_root")) {
+      char new_root[FILENAME_MAX], putold[FILENAME_MAX];
+      if (sscanf(val, "%[^:]:%[^:]", new_root, putold) == 2) {
+        checked_pivot_root(new_root, putold);
       } else {
-        checked_chdir(val);
+        fprintf(stderr, "wrong format to pivot_root");
+        return EZ_ERROR_CORRUPT;
       }
     } else if (STREQ(key, "bind")) {
       char from[FILENAME_MAX], to[FILENAME_MAX];
@@ -215,8 +261,8 @@ EZ_RET list_callback_v(void *user, EZ_TYPE type, va_list list) {
         return EZ_ERROR_CORRUPT;
       }
     } else if (STREQ(key, "exec")) {
-      checked_wordexp(val, &exp, 0);
-      execv(exp.we_wordv[0], exp.we_wordv);
+      char **args = parse_arg(val);
+      execv(args[0], args);
       perror("execv");
       exit(254);
     } else if (STREQ(key, "exec-passthru")) {
@@ -266,17 +312,16 @@ EZ_RET list_callback_v(void *user, EZ_TYPE type, va_list list) {
   }
   return EZ_OK;
 err:
-  wordfree(&exp);
   free(buffer);
   if (fd != -1)
     close(fd);
   return EZ_ERROR_SYSCALL;
 }
 
-EZ_RET list_callback(void *user, EZ_TYPE type, ...) {
+EZ_RET my_callback(void *user, EZ_TYPE type, ...) {
   va_list list;
   va_start(list, type);
-  EZ_RET ret = list_callback_v(user, type, list);
+  EZ_RET ret = my_callback_v(user, type, list);
   va_end(list);
   return ret;
 }
@@ -284,22 +329,22 @@ EZ_RET list_callback(void *user, EZ_TYPE type, ...) {
 int main(int argc, char *argv[]) {
   g_argv = argv;
   FILE *file;
-  XELF ehdr;
   EZ_RET ret;
-  size_t elfsize = 0;
-  file = checked_fopen("/proc/self/exe", "r");
-  checked_read(&ehdr, sizeof(ehdr), file);
-  elfsize = ehdr.e_shoff + ehdr.e_shnum * ehdr.e_shentsize;
-  fseek(file, elfsize, SEEK_SET);
-  if (getuid() != 0) {
+  file = getpayload(NULL);
+  if (!file)
+    goto err;
+  if (geteuid() != 0) {
+    int uid = geteuid(), gid = getegid();
     checked_unshare(CLONE_NEWUSER);
     deny_to_setgroups();
-    map_to_root(geteuid(), "/proc/self/uid_map");
-    map_to_root(getegid(), "/proc/self/gid_map");
+    map_to_root(uid, "/proc/self/uid_map");
+    map_to_root(gid, "/proc/self/gid_map");
   }
   checked_unshare(CLONE_NEWNS);
-  // check_err(ez_unpack(file, true, ez_callback callback, NULL));
+  pkstatus status;
+  check_err(ez_unpack(file, true, my_callback, &status));
   return 0;
 err:
-  return 1;
+  fprintf(stderr, "%s\n", ez_error_string(ret));
+  return ret;
 }
