@@ -25,6 +25,8 @@ add_custom_command(
   DEPENDS stub
   COMMENT "Embedding stub to ezbin")
 
+set_property(SOURCE ezbin-zero PROPERTY GENERATED 1)
+
 add_custom_target(ez ALL DEPENDS ezbin)
 
 install(TARGETS ezio RUNTIME DESTINATION bin)
