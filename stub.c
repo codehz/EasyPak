@@ -1,8 +1,8 @@
 #define _GNU_SOURCE
 
 #include "ezpak.h"
-#include "payload.h"
 #include "parse_arg.h"
+#include "payload.h"
 #include <assert.h>
 #include <fcntl.h>
 #include <sched.h>
@@ -152,8 +152,7 @@ typedef enum pkstrategy {
 } pkstrategy;
 
 typedef struct pkstatus {
-  pkstrategy overwrite_folder;
-  pkstrategy overwrite_file;
+  pkstrategy overwrite;
 } pkstatus;
 
 #define STREQ(a, b) (strcmp(a, b) == 0)
@@ -221,14 +220,10 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       fprintf(stderr, "%s\n", val);
     } else if (STREQ(key, "strategy")) {
       int mode = 0;
-      if (sscanf(val, "overwrite_folder:%d", &mode) != 1) {
+      if (sscanf(val, "overwrite:%d", &mode) != 1) {
         if (mode < STRATEGY_ERROR || mode > STRATEGY_SKIP)
           return EZ_ERROR_CORRUPT;
-        status->overwrite_folder = mode;
-      } else if (sscanf(val, "overwrite_file:%d", &mode) != 1) {
-        if (mode < STRATEGY_ERROR || mode > STRATEGY_SKIP)
-          return EZ_ERROR_CORRUPT;
-        status->overwrite_file = mode;
+        status->overwrite = mode;
       } else {
         fprintf(stderr, "unsupported strategy: %s\n", val);
         return EZ_ERROR_CORRUPT;
@@ -282,6 +277,14 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     int sfd = va_arg(list, int);
     off_t *off = va_arg(list, off_t *);
     size_t size = va_arg(list, size_t);
+    if (access(key, F_OK) == 0) {
+      if (status->overwrite == STRATEGY_SKIP)
+        break;
+      if (status->overwrite == STRATEGY_ERROR) {
+        fprintf(stderr, "File %s exists!\n", key);
+        return EZ_ERROR_CORRUPT;
+      }
+    }
     fd = checked_open(key, O_WRONLY | O_CREAT, 0777);
     checked_sendfile(fd, sfd, off, size);
     checked_fchmod(fd, mode);
@@ -298,7 +301,7 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
   case EZ_T_DIR: {
     char const *key = va_arg(list, char const *);
     uint16_t mode = va_arg(list, int);
-    checked_mkdir(key, mode);
+    mkdir(key, mode);
     checked_chdir(key);
     break;
   }
