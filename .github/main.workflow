@@ -29,5 +29,5 @@ workflow "Test build" {
 
 action "codehz/arch-cmake-builder@master-1" {
   uses = "codehz/arch-cmake-builder@master"
-  args = "CC=musl"
+  args = "CC=musl-gcc"
 }
