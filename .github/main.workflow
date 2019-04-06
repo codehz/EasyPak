@@ -21,13 +21,3 @@ action "JasonEtco/upload-to-release@master-1" {
   args = "build/ezio application/x-executable"
   secrets = ["GITHUB_TOKEN"]
 }
-
-workflow "Test build" {
-  resolves = ["codehz/arch-cmake-builder@master-1"]
-  on = "push"
-}
-
-action "codehz/arch-cmake-builder@master-1" {
-  uses = "codehz/arch-cmake-builder@master"
-  args = "CC=musl-gcc"
-}
