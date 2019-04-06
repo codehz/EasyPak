@@ -71,6 +71,8 @@ int get_nbro(file_tree *cur) {
 }
 
 void free_file_tree(file_tree *tree) {
+  if (!tree)
+    return;
   free(tree->name);
   switch (tree->type) {
   case FILE_REGULAR:
@@ -84,8 +86,7 @@ void free_file_tree(file_tree *tree) {
   }
   file_tree *next = tree->next;
   free(tree);
-  if (next)
-    free_file_tree(next);
+  free_file_tree(next);
 }
 
 static void *my_init(struct fuse_conn_info *conn, struct fuse_config *cfg) {
@@ -242,7 +243,7 @@ int setup_fuse(char *target, file_tree *tree) {
     current_tree = tree;
     exit(fuse_main(5, args, &my_oper, NULL));
   }
-  free_file_tree(tree);
+  // free_file_tree(tree);
   eventfd_t e;
   eventfd_read(event, &e);
   close(event);
