@@ -29,19 +29,21 @@ exec-passthru /usr/bin/endpoint
 2. Only perserve 9bit permission info, no owner uid/gid or SELinux context
 
 ## command list
- * print: print something to stdout
- * warn: print something to stderr
- * strategy:<br>
-   `overwrite:0` means threat overwriting files as error<br>
-   `overwrite:1` means force overwrite files<br>
-   `overwrite:2` means skip exist files
- * chdir: just change current working directory<br>
-   PS: will create target directory automatically
- * mkdir: create directory
- * mktmpfs: mount tmpfs to target directory<br>
-   PS: will create target directory automatically
- * chroot: change root directory
- * pivot_root
- * bind: just like `mount --bind` command
- * exec: execute command
- * exec-passthru: execute command but passthrough all arguments to it
+
+- `print message`: print something to stdout
+- `warn message`: print something to stderr
+- `strategy content`:<br>
+  `overwrite:0` means threat overwriting files as error<br>
+  `overwrite:1` means force overwrite files<br>
+  `overwrite:2` means skip exist files
+- `chdir target`: just change current working directory<br>
+  PS: will create target directory automatically
+- `mkdir target`: create directory
+- `mktmpfs target`: mount tmpfs to target directory<br>
+  PS: will create target directory automatically
+- `chroot target`: change root directory
+- `pivot_root src:target`
+- `bind src:target`: just like `mount --bind` command
+- `exec cmdline`: execute command
+- `exec-passthru executable`: execute command but passthrough all arguments to it
+- `fuse target`: use fuse to target directory
