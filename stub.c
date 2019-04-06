@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 
 #include "ezpak.h"
+#include "fuse_support.h"
 #include "parse_arg.h"
 #include "payload.h"
 #include <assert.h>
@@ -153,7 +154,33 @@ typedef enum pkstrategy {
 
 typedef struct pkstatus {
   pkstrategy overwrite;
+  char *fuse_mode;
+  file_tree *ft_root, *ft_current;
+  bool ft_enter;
 } pkstatus;
+
+#define make_ft_node(node, key, T)                                             \
+  file_tree *node = calloc(1, sizeof(file_tree));                              \
+  node->type = T;                                                              \
+  node->name = strdup(key);                                                    \
+  node->name_hash = hash(key);
+
+#define insert_ft_node(status, node)                                           \
+  ({                                                                           \
+    if (!status->ft_root) {                                                    \
+      status->ft_root = status->ft_current = node;                             \
+    } else {                                                                   \
+      if (status->ft_enter) {                                                  \
+        status->ft_current->child = node;                                      \
+        node->parent = status->ft_current;                                     \
+      } else {                                                                 \
+        status->ft_current->next = node;                                       \
+        node->parent = status->ft_current->parent;                             \
+      }                                                                        \
+      status->ft_current = node;                                               \
+      status->ft_enter = false;                                                \
+    }                                                                          \
+  })
 
 #define STREQ(a, b) (strcmp(a, b) == 0)
 
@@ -214,6 +241,13 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
   case EZ_T_MAN: {
     char const *key = va_arg(list, char const *);
     char const *val = va_arg(list, char const *);
+    if (status->fuse_mode) {
+      status->ft_current = NULL;
+      status->ft_enter = false;
+      setup_fuse(status->fuse_mode, status->ft_root);
+      free(status->fuse_mode);
+      status->fuse_mode = NULL;
+    }
     if (STREQ(key, "print")) {
       printf("%s\n", val);
     } else if (STREQ(key, "warn")) {
@@ -264,6 +298,12 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       execv(val, g_argv);
       perror("execv");
       exit(254);
+    } else if (STREQ(key, "fuse")) {
+      if (strlen(val) == 0) {
+        status->fuse_mode = strdup(".");
+      } else {
+        status->fuse_mode = strdup(val);
+      }
     }
     break;
   }
@@ -277,38 +317,76 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     int sfd = va_arg(list, int);
     off_t *off = va_arg(list, off_t *);
     size_t size = va_arg(list, size_t);
-    if (access(key, F_OK) == 0) {
-      if (status->overwrite == STRATEGY_SKIP)
-        break;
-      if (status->overwrite == STRATEGY_ERROR) {
-        fprintf(stderr, "File %s exists!\n", key);
-        return EZ_ERROR_CORRUPT;
+    if (status->fuse_mode) {
+      make_ft_node(node, key, FILE_REGULAR);
+      node->mode = mode;
+      node->offset = *off;
+      node->length = size;
+      insert_ft_node(status, node);
+    } else {
+      if (access(key, F_OK) == 0) {
+        if (status->overwrite == STRATEGY_SKIP)
+          break;
+        if (status->overwrite == STRATEGY_ERROR) {
+          fprintf(stderr, "File %s exists!\n", key);
+          return EZ_ERROR_CORRUPT;
+        }
       }
+      fd = checked_open(key, O_WRONLY | O_CREAT, 0777);
+      checked_sendfile(fd, sfd, off, size);
+      checked_fchmod(fd, mode);
+      close(fd);
+      fd = -1;
     }
-    fd = checked_open(key, O_WRONLY | O_CREAT, 0777);
-    checked_sendfile(fd, sfd, off, size);
-    checked_fchmod(fd, mode);
-    close(fd);
-    fd = -1;
     break;
   }
   case EZ_T_LNK: {
     char const *key = va_arg(list, char const *);
     char const *val = va_arg(list, char const *);
-    checked_symlink(val, key);
+    if (status->fuse_mode) {
+      make_ft_node(node, key, FILE_LINK);
+      node->link = strdup(val);
+      insert_ft_node(status, node);
+    } else {
+      checked_symlink(val, key);
+    }
     break;
   }
   case EZ_T_DIR: {
     char const *key = va_arg(list, char const *);
     uint16_t mode = va_arg(list, int);
-    mkdir(key, mode);
-    checked_chdir(key);
+    if (status->fuse_mode) {
+      make_ft_node(node, key, FILE_FOLDER);
+      node->mode = mode;
+      insert_ft_node(status, node);
+      status->ft_enter = true;
+    } else {
+      mkdir(key, mode);
+      checked_chdir(key);
+    }
     break;
   }
   case EZ_T_POP:
-    checked_chdir("..");
+    if (status->fuse_mode) {
+      if (status->ft_enter) {
+        status->ft_enter = false;
+      } else {
+        assert(status->ft_current);
+        assert(status->ft_current->parent);
+        status->ft_current = status->ft_current->parent;
+      }
+    } else {
+      checked_chdir("..");
+    }
     break;
   case EZ_T_END:
+    if (status->fuse_mode) {
+      status->ft_current = NULL;
+      status->ft_enter = false;
+      setup_fuse(status->fuse_mode, status->ft_root);
+      free(status->fuse_mode);
+      status->fuse_mode = NULL;
+    }
     break;
   default:
     return EZ_ERROR_NOT_IMPL;
@@ -334,6 +412,7 @@ int main(int argc, char *argv[]) {
   FILE *file;
   EZ_RET ret;
   file = getpayload(NULL);
+  basefile = file;
   if (!file)
     goto err;
   if (geteuid() != 0) {

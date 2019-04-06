@@ -14,7 +14,7 @@ enum parse_escape_state {
 };
 
 char **parse_arg(char const *input) {
-  char **ret = malloc(256), **head = ret;
+  char **ret = calloc(sizeof(char *), 256), **head = ret;
   char *buffer = calloc(1, 1024), *buffer_head = buffer;
   enum parse_state status = PARSE_EATING;
   char quote = ' ';
