@@ -276,7 +276,7 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       char *solved = envsolver(val);
       if (access(solved, F_OK) != 0)
         mkdir_p(solved);
-      checked_mount("tmpfs", solved, "tmpfs", MS_PRIVATE, NULL);
+      checked_mount("tmpfs", solved, "tmpfs", 0, NULL);
       free(solved);
     } else if (STREQ(key, "chroot")) {
       char *solved = envsolver(val);
