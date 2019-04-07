@@ -177,10 +177,10 @@ int main(int argc, char *argv[]) {
     } else if (line[0] == '#') {
       continue;
     } else {
-      char *key = strtok(line, " ");
+      char *key = strtok(line, " \n");
       char *val = strtok(NULL, "\n");
       printf("m--------- %s: %s\n", key, val);
-      check_err(ez_manifest(output, key, val));
+      check_err(ez_manifest(output, key, val ?: ""));
     }
   }
 
