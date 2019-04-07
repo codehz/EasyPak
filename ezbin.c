@@ -172,6 +172,8 @@ int main(int argc, char *argv[]) {
 
   char line[65536];
   while (fgets(line, sizeof line, input) != NULL) {
+    if (strlen(line) == 0)
+      continue;
     if (line[0] == '@') {
       dirfd = checked_open(strtok(line + 1, "\n"), O_DIRECTORY);
       check_err(pack_iterator(output, dirfd, 0));
