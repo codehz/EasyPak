@@ -55,6 +55,5 @@ char *envsolver(char const *input) {
         *cur++ = *enval++;
     }
   }
-  printf("solved: %s\n", ret);
   return ret;
 }
