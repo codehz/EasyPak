@@ -32,7 +32,7 @@ target_link_directories(fuse_support INTERFACE ${FUSE_DIR}/lib)
 target_link_libraries(fuse_support INTERFACE fuse3)
 target_include_directories(fuse_support PRIVATE ${FUSE_DIR}/include)
 
-add_executable(stub stub.c parse_arg.c)
+add_executable(stub stub.c parse_arg.c envsolver.c)
 target_link_libraries(stub ezpak payload fuse_support)
 
 add_executable(ezbin-zero ezbin.c)

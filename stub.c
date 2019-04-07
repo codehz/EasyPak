@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 
+#include "envsolver.h"
 #include "ezpak.h"
 #include "fuse_support.h"
 #include "parse_arg.h"
@@ -263,39 +264,53 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
         return EZ_ERROR_CORRUPT;
       }
     } else if (STREQ(key, "chdir")) {
-      mkdir_p(val);
-      checked_chdir(val);
+      char *solved = envsolver(val);
+      mkdir_p(solved);
+      checked_chdir(solved);
+      free(solved);
     } else if (STREQ(key, "mkdir")) {
-      mkdir_p(val);
+      char *solved = envsolver(val);
+      mkdir_p(solved);
+      free(solved);
     } else if (STREQ(key, "mktmpfs")) {
-      if (access(val, F_OK) != 0)
-        mkdir_p(val);
-      checked_mount("tmpfs", val, "tmpfs", 0, NULL);
+      char *solved = envsolver(val);
+      if (access(solved, F_OK) != 0)
+        mkdir_p(solved);
+      checked_mount("tmpfs", solved, "tmpfs", 0, NULL);
+      free(solved);
     } else if (STREQ(key, "chroot")) {
-      checked_chroot(val);
+      char *solved = envsolver(val);
+      checked_chroot(solved);
+      free(solved);
     } else if (STREQ(key, "pivot_root")) {
       char new_root[FILENAME_MAX], putold[FILENAME_MAX];
-      if (sscanf(val, "%[^:]:%[^:]", new_root, putold) == 2) {
+      char *solved = envsolver(val);
+      if (sscanf(solved, "%[^:]:%[^:]", new_root, putold) == 2) {
         checked_pivot_root(new_root, putold);
       } else {
         fprintf(stderr, "wrong format to pivot_root");
         return EZ_ERROR_CORRUPT;
       }
+      free(solved);
     } else if (STREQ(key, "bind")) {
       char from[FILENAME_MAX], to[FILENAME_MAX];
-      if (sscanf(val, "%[^:]:%[^:]", from, to) == 2) {
+      char *solved = envsolver(val);
+      if (sscanf(solved, "%[^:]:%[^:]", from, to) == 2) {
         checked_mount(from, to, "tmpfs", MS_BIND | MS_REC, NULL);
       } else {
         fprintf(stderr, "wrong format to mount");
         return EZ_ERROR_CORRUPT;
       }
+      free(solved);
     } else if (STREQ(key, "exec")) {
-      char **args = parse_arg(val);
+      char *solved = envsolver(val);
+      char **args = parse_arg(solved);
       execv(args[0], args);
       perror("execv");
       exit(254);
     } else if (STREQ(key, "exec-passthru")) {
-      execv(val, g_argv);
+      char *solved = envsolver(val);
+      execv(solved, g_argv);
       perror("execv");
       exit(254);
     } else if (STREQ(key, "fuse")) {
@@ -409,8 +424,8 @@ EZ_RET my_callback(void *user, EZ_TYPE type, ...) {
 
 int main(int argc, char *argv[]) {
   g_argv = argv;
-  FILE *file;
-  EZ_RET ret;
+  FILE *file = NULL;
+  EZ_RET ret = EZ_OK;
   file = getpayload(NULL);
   basefile = file;
   if (!file)
@@ -423,7 +438,7 @@ int main(int argc, char *argv[]) {
     map_to_root(gid, "/proc/self/gid_map");
   }
   checked_unshare(CLONE_NEWNS);
-  pkstatus status;
+  pkstatus status = {0};
   check_err(ez_unpack(file, true, my_callback, &status));
   return 0;
 err:
