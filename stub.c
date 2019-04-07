@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/inotify.h>
+#include <sys/mman.h>
 #include <sys/mount.h>
 #include <sys/prctl.h>
 #include <sys/sendfile.h>
@@ -506,8 +507,15 @@ int main(int argc, char *argv[]) {
   g_argv = argv;
   FILE *file = NULL;
   EZ_RET ret = EZ_OK;
+  struct stat sb;
+  char wd[FILENAME_MAX];
+
+  getcwd(wd, FILENAME_MAX);
+  setenv("STARTWD", wd, 1);
+
   file = getpayload(NULL);
-  basefile = file;
+  fstat(fileno(file), &sb);
+  mapped = mmap(NULL, sb.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE, fileno(file), 0);
   if (!file)
     goto err;
   if (geteuid() != 0) {
