@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 SET(BUILD_SHARED_LIBS OFF)
 SET(CMAKE_EXE_LINKER_FLAGS "-static")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-switch -Wno-unused-command-line-argument")
 
 include(ExternalProject)
 
@@ -16,6 +17,8 @@ ExternalProject_Add(
 )
 
 ExternalProject_Get_property(libfuse INSTALL_DIR)
+set(FUSE_DIR ${INSTALL_DIR})
+unset(INSTALL_DIR)
 
 add_library(ezpak ezpak.c ezpak.h)
 add_library(payload payload.c payload.h)
@@ -25,9 +28,9 @@ target_link_libraries(ezio ezpak)
 
 add_library(fuse_support fuse_support.c fuse_support.h)
 add_dependencies(fuse_support libfuse)
-target_link_directories(fuse_support INTERFACE ${INSTALL_DIR}/lib)
+target_link_directories(fuse_support INTERFACE ${FUSE_DIR}/lib)
 target_link_libraries(fuse_support INTERFACE fuse3)
-target_include_directories(fuse_support PRIVATE ${INSTALL_DIR}/include)
+target_include_directories(fuse_support PRIVATE ${FUSE_DIR}/include)
 
 add_executable(stub stub.c parse_arg.c)
 target_link_libraries(stub ezpak payload fuse_support)
