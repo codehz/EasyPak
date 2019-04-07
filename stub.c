@@ -8,13 +8,16 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <sched.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
+#include <sys/prctl.h>
 #include <sys/sendfile.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #define pivot_root(new_root, put_old) syscall(SYS_pivot_root, new_root, put_old)
@@ -155,6 +158,7 @@ typedef enum pkstrategy {
 
 typedef struct pkstatus {
   pkstrategy overwrite;
+  pid_t lastpid;
   char *fuse_mode;
   file_tree *ft_root, *ft_current;
   bool ft_enter;
@@ -308,6 +312,22 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       execv(args[0], args);
       perror("execv");
       exit(254);
+    } else if (STREQ(key, "exec-background")) {
+      pid_t pid = fork();
+      if (pid < 0) {
+        perror("execv");
+        exit(254);
+      }
+      if (pid == 0) {
+        prctl(PR_SET_PDEATHSIG, SIGINT, 0, 0, 0);
+        char *solved = envsolver(val);
+        execv(solved, g_argv);
+        perror("execv");
+        exit(254);
+      }
+      status->lastpid = pid;
+    } else if (STREQ(key, "wait")) {
+      waitpid(status->lastpid, NULL, 0);
     } else if (STREQ(key, "exec-passthru")) {
       char *solved = envsolver(val);
       execv(solved, g_argv);
