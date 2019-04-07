@@ -237,7 +237,12 @@ int setup_fuse(char *target, file_tree *tree) {
   if (pid == 0) {
     char *prname;
     asprintf(&prname, "FUSE(%s)", target);
-    prctl(PR_SET_PDEATHSIG, SIGINT);
+    signal(SIGINT, SIG_IGN);
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGQUIT, SIG_IGN);
+    signal(SIGTERM, SIG_IGN);
+    signal(SIGTSTP, SIG_IGN);
+    prctl(PR_SET_PDEATHSIG, SIGUSR2);
     prctl(PR_SET_NAME, prname);
     free(prname);
     current_tree = tree;
