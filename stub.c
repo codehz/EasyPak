@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/inotify.h>
 #include <sys/mount.h>
 #include <sys/prctl.h>
 #include <sys/sendfile.h>
@@ -329,6 +330,17 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       status->lastpid = pid;
     } else if (STREQ(key, "wait")) {
       waitpid(status->lastpid, NULL, 0);
+    } else if (STREQ(key, "waitdir")) {
+      int ifd = inotify_init();
+      char *solved = envsolver(val);
+      inotify_add_watch(ifd, solved, IN_MODIFY | IN_CREATE | IN_DELETE | IN_ONESHOT);
+      free(solved);
+      char temp[1024];
+      if (read(ifd, &temp, sizeof temp) < 0) {
+        perror("inotify");
+        exit(254);
+      }
+      close(ifd);
     } else if (STREQ(key, "exec-passthru")) {
       char *solved = envsolver(val);
       execv(solved, g_argv);
