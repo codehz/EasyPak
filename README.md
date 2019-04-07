@@ -45,5 +45,10 @@ exec-passthru /usr/bin/endpoint
 - `pivot_root src:target`
 - `bind src:target`: just like `mount --bind` command
 - `exec cmdline`: execute command
+- `exec-background cmdline`: execute command in background
+- `wait`: wait last *background* task to exit
+- `waitdir dir`: wait target dir to be changed
 - `exec-passthru executable`: execute command but passthrough all arguments to it
 - `fuse target`: use fuse to target directory
+- `env name=value`: set environment (overwrite)
+- `option name=value`: set enivironment (ignore if set already)
