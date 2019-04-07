@@ -11,11 +11,13 @@
 #include <string.h>
 #include <sys/eventfd.h>
 #include <sys/prctl.h>
+#include <threads.h>
 #include <unistd.h>
 
 FILE *basefile;
 static file_tree *current_tree;
 static int event;
+static mtx_t mtx;
 
 unsigned long hash(char const *str) {
   unsigned long hash = 5381;
@@ -190,14 +192,19 @@ static int my_read(const char *path, char *buf, size_t size, off_t offset,
     return 0;
   if (offset + size > found->length)
     size = found->length - offset;
+  mtx_lock(&mtx);
   int fd = fileno(basefile);
   int ret = lseek(fd, found->offset + offset, SEEK_SET);
   if (ret == -1)
-    return -errno;
+    goto err;
   ret = read(fd, buf, size);
   if (ret == -1)
-    return -errno;
+    goto err;
+  mtx_unlock(&mtx);
   return ret;
+err:
+  mtx_unlock(&mtx);
+  return -errno;
 }
 
 static int my_access(const char *path, int op) {
@@ -241,6 +248,7 @@ int setup_fuse(char *target, file_tree *tree) {
   if (pid == 0) {
     prctl(PR_SET_PDEATHSIG, SIGINT, 0, 0, 0);
     current_tree = tree;
+    mtx_init(&mtx, mtx_plain);
     exit(fuse_main(5, args, &my_oper, NULL));
   }
   // free_file_tree(tree);
