@@ -339,6 +339,9 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
         setenv(skey, sval, 0);
       else
         return EZ_ERROR_CORRUPT;
+    } else {
+      fprintf(stderr, "unsupported: %s\n", key);
+      return EZ_ERROR_CORRUPT;
     }
     break;
   }
