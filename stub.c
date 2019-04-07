@@ -63,6 +63,16 @@
     ret;                                                                       \
   })
 
+#define checked_freopen(str, mode, stream)                                     \
+  ({                                                                           \
+    FILE *ret = freopen(str, mode, stream);                                    \
+    if (!ret) {                                                                \
+      perror("freopen");                                                       \
+      return EZ_ERROR_SYSCALL;                                                 \
+    }                                                                          \
+    ret;                                                                       \
+  })
+
 #define checked_write(fd, buf, count)                                          \
   ({                                                                           \
     int ret = write(fd, buf, count);                                           \
@@ -381,6 +391,18 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       if (pid) {
         status->lastpid = pid;
       }
+    } else if (STREQ(key, "stdout")) {
+      assert(strlen(val) != 0);
+      char *solved = envsolver(val);
+      checked_freopen(solved, "a", stdout);
+    } else if (STREQ(key, "stderr")) {
+      assert(strlen(val) != 0);
+      char *solved = envsolver(val);
+      checked_freopen(solved, "a", stderr);
+    } else if (STREQ(key, "stdin")) {
+      assert(strlen(val) != 0);
+      char *solved = envsolver(val);
+      checked_freopen(solved, "r", stdin);
     } else {
       fprintf(stderr, "unsupported: %s\n", key);
       return EZ_ERROR_CORRUPT;
