@@ -317,8 +317,18 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       if (strlen(val) == 0) {
         status->fuse_mode = strdup(".");
       } else {
-        status->fuse_mode = strdup(val);
+        status->fuse_mode = envsolver(val);
       }
+    } else if (STREQ(key, "env")) {
+      assert(strlen(val) != 0);
+      char *solved = envsolver(val);
+      char from[FILENAME_MAX], to[FILENAME_MAX];
+      char *skey = strtok(solved, "=");
+      char *sval = strtok(NULL, "=");
+      if (sval)
+        setenv(skey, sval, 1);
+      else
+        unsetenv(skey);
     }
     break;
   }
