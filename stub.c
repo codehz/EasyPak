@@ -276,7 +276,7 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       char *solved = envsolver(val);
       if (access(solved, F_OK) != 0)
         mkdir_p(solved);
-      checked_mount("tmpfs", solved, "tmpfs", 0, NULL);
+      checked_mount("tmpfs", solved, "tmpfs", MS_PRIVATE, NULL);
       free(solved);
     } else if (STREQ(key, "chroot")) {
       char *solved = envsolver(val);
@@ -296,7 +296,7 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       char from[FILENAME_MAX], to[FILENAME_MAX];
       char *solved = envsolver(val);
       if (sscanf(solved, "%[^:]:%[^:]", from, to) == 2) {
-        checked_mount(from, to, "tmpfs", MS_BIND | MS_REC, NULL);
+        checked_mount(from, to, "tmpfs", MS_BIND | MS_REC | MS_PRIVATE, NULL);
       } else {
         fprintf(stderr, "wrong format to mount");
         return EZ_ERROR_CORRUPT;
