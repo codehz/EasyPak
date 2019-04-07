@@ -102,7 +102,7 @@ EZ_RET pack_iterator(FILE *file, int dirfd, int level) {
   DIR *root = NULL;
   char link_buffer[FILENAME_MAX];
   int fd = -1;
-  EZ_RET ret;
+  EZ_RET ret = EZ_OK;
   root = checked_fdopendir(dirfd);
   while (1) {
     struct dirent *dir_entry = NULL;
@@ -155,7 +155,7 @@ err:
 }
 
 int main(int argc, char *argv[]) {
-  EZ_RET ret;
+  EZ_RET ret = EZ_OK;
   size_t binsize = 0;
   int dirfd = -1;
   FILE *payload = getpayload(&binsize);
@@ -163,8 +163,9 @@ int main(int argc, char *argv[]) {
     goto payload_err;
   if (argc != 3)
     goto arg_err;
-  FILE *output = checked_fopen(argv[1], "wb");
-  FILE *input = checked_fopen(argv[2], "rb");
+  FILE *output = NULL, *input = NULL;
+  output = checked_fopen(argv[1], "wb");
+  input = checked_fopen(argv[2], "rb");
   checked_sendfile(fileno(output), fileno(payload), NULL, binsize);
   fclose(payload);
   check_err(ez_begin(output));

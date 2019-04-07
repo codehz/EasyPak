@@ -127,7 +127,7 @@ EZ_RET ez_push(FILE *file, enum EZ_TYPE type, ...) {
   va_start(list, type);
   EZ_RET ret = ez_push_v(file, type, list);
   va_end(list);
-  return EZ_OK;
+  return ret;
 }
 
 EZ_RET ez_push_v(FILE *file, enum EZ_TYPE type, va_list list) {

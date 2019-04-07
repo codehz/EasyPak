@@ -147,7 +147,7 @@ EZ_RET pack_iterator(FILE *file, int dirfd, int level) {
   DIR *root = NULL;
   char link_buffer[FILENAME_MAX];
   int fd = -1;
-  EZ_RET ret;
+  EZ_RET ret = EZ_OK;
   root = checked_fdopendir(dirfd);
   while (1) {
     struct dirent *dir_entry = NULL;
@@ -307,7 +307,6 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     break;
   }
   case EZ_T_POP: {
-    uint16_t mode = 0755;
     fd_chain *n = fd_pop(chain);
     if (!n)
       goto corrupt;
@@ -349,6 +348,7 @@ EZ_RET list_callback_v(void *user, EZ_TYPE type, va_list list) {
     char const *key = va_arg(list, char const *);
     uint16_t mode = va_arg(list, int);
     char const *content = va_arg(list, char const *);
+    (void)content;
     uint64_t size = va_arg(list, uint64_t);
     printf("-%s %*s%s (%s)\n", printMode(mode), *level * PAD, "", key,
            readable_fs(size));
@@ -360,6 +360,8 @@ EZ_RET list_callback_v(void *user, EZ_TYPE type, va_list list) {
     int sfd = va_arg(list, int);
     off_t *off = va_arg(list, off_t *);
     size_t size = va_arg(list, size_t);
+    (void)sfd;
+    (void)off;
     printf("-%s %*s%s (%s)\n", printMode(mode), *level * PAD, "", key,
            readable_fs(size));
     break;
@@ -399,7 +401,7 @@ EZ_RET list_callback(void *user, EZ_TYPE type, ...) {
 int main(int argc, char *argv[]) {
   FILE *arch = NULL;
   fd_chain *chain = NULL;
-  EZ_RET ret;
+  EZ_RET ret = EZ_OK;
   if (argc <= 2)
     goto err_args;
   if (strcmp(argv[1], "pack") == 0) {

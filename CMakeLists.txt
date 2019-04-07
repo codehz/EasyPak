@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 SET(BUILD_SHARED_LIBS OFF)
 SET(CMAKE_EXE_LINKER_FLAGS "-static")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-switch -Wno-unused-command-line-argument")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-switch -Wno-unused-command-line-argument")
 
 include(ExternalProject)
 

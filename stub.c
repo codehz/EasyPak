@@ -252,6 +252,7 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       status->ft_enter = false;
       setup_fuse(status->fuse_mode, status->ft_root);
       free(status->fuse_mode);
+      status->ft_root = NULL;
       status->fuse_mode = NULL;
     }
     if (STREQ(key, "print")) {
@@ -333,7 +334,8 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     } else if (STREQ(key, "waitdir")) {
       int ifd = inotify_init();
       char *solved = envsolver(val);
-      inotify_add_watch(ifd, solved, IN_MODIFY | IN_CREATE | IN_DELETE | IN_ONESHOT);
+      inotify_add_watch(ifd, solved,
+                        IN_MODIFY | IN_CREATE | IN_DELETE | IN_ONESHOT);
       free(solved);
       char temp[1024];
       if (read(ifd, &temp, sizeof temp) < 0) {
@@ -355,7 +357,6 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     } else if (STREQ(key, "env")) {
       assert(strlen(val) != 0);
       char *solved = envsolver(val);
-      char from[FILENAME_MAX], to[FILENAME_MAX];
       char *skey = strtok(solved, "=");
       char *sval = strtok(NULL, "=");
       if (sval)
@@ -365,7 +366,6 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     } else if (STREQ(key, "option")) {
       assert(strlen(val) != 0);
       char *solved = envsolver(val);
-      char from[FILENAME_MAX], to[FILENAME_MAX];
       char *skey = strtok(solved, "=");
       char *sval = strtok(NULL, "=");
       if (sval)
@@ -451,13 +451,6 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     }
     break;
   case EZ_T_END:
-    if (status->fuse_mode) {
-      status->ft_current = NULL;
-      status->ft_enter = false;
-      setup_fuse(status->fuse_mode, status->ft_root);
-      free(status->fuse_mode);
-      status->fuse_mode = NULL;
-    }
     break;
   default:
     return EZ_ERROR_NOT_IMPL;
