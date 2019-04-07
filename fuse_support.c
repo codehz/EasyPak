@@ -1,4 +1,5 @@
 #define FUSE_USE_VERSION 31
+#define _GNU_SOURCE
 
 #include "fuse_support.h"
 #include <assert.h>
@@ -246,8 +247,11 @@ int setup_fuse(char *target, file_tree *tree) {
   if (pid < 0)
     return pid;
   if (pid == 0) {
+    char *prname;
+    asprintf(&prname, "FUSE(%s)", target);
     prctl(PR_SET_PDEATHSIG, SIGINT);
-    prctl(PR_SET_NAME, "FUSE Daemon");
+    prctl(PR_SET_NAME, prname);
+    free(prname);
     current_tree = tree;
     mtx_init(&mtx, mtx_plain);
     exit(fuse_main(5, args, &my_oper, NULL));
