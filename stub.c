@@ -319,9 +319,10 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
         exit(254);
       }
       if (pid == 0) {
-        prctl(PR_SET_PDEATHSIG, SIGINT, 0, 0, 0);
+        prctl(PR_SET_PDEATHSIG, SIGINT);
         char *solved = envsolver(val);
-        execv(solved, g_argv);
+        char **args = parse_arg(solved);
+        execv(args[0], args);
         perror("execv");
         exit(254);
       }
