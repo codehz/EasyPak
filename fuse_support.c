@@ -251,7 +251,7 @@ int setup_fuse(char *target, file_tree *tree) {
     mtx_init(&mtx, mtx_plain);
     exit(fuse_main(5, args, &my_oper, NULL));
   }
-  // free_file_tree(tree);
+  free_file_tree(tree);
   eventfd_t e;
   eventfd_read(event, &e);
   close(event);
