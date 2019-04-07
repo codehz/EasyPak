@@ -62,10 +62,10 @@ file_tree *find_path(char const *raw_path) {
 }
 
 int get_nbro(file_tree *cur) {
-  int n = 0;
+  int n = 2;
   while (cur) {
+    n += cur->type == FILE_FOLDER;
     cur = cur->next;
-    n++;
   }
   return n;
 }
@@ -109,7 +109,7 @@ void fillattr(struct stat *stbuf, file_tree *found) {
     break;
   case FILE_FOLDER:
     stbuf->st_mode = S_IFDIR | (found->mode & 0777);
-    stbuf->st_nlink = 2 + get_nbro(found->child);
+    stbuf->st_nlink = get_nbro(found->child);
     break;
   }
 }
@@ -119,7 +119,7 @@ static int my_getattr(const char *path, struct stat *stbuf,
   int res = 0;
   if (strcmp(path, "/") == 0) {
     stbuf->st_mode = S_IFDIR | 0755;
-    stbuf->st_nlink = 2 + get_nbro(current_tree);
+    stbuf->st_nlink = get_nbro(current_tree);
   } else {
     file_tree *found = find_path(path);
     if (!found) {
