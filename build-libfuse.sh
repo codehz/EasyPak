@@ -4,4 +4,6 @@ tgt=$2
 if [ -e build.ninja ]; then
   rm -rf ./*
 fi
-CFLAGS="-I${src}/shim -Os -Wno-unused-command-line-argument" meson --prefix="${tgt}/libfuse" --default-library=static -Dutils=false "${src}/libfuse"
+export LDFLAGS="-Os -Wl,--gc-sections -s"
+export CFLAGS="-I${src}/shim -Wno-unused-command-line-argument -Os -ffunction-sections -fdata-sections"
+meson --prefix="${tgt}/libfuse" --default-library=static -Dutils=false "${src}/libfuse"

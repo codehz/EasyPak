@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 
 #include "ezpak.h"
+#include "ezutils.h"
 #include <assert.h>
 #include <dirent.h>
 #include <err.h>
@@ -10,16 +11,6 @@
 #include <sys/sendfile.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-#define checked_fdopendir(fd)                                                  \
-  ({                                                                           \
-    DIR *temp = fdopendir(fd);                                                 \
-    if (temp == NULL) {                                                        \
-      perror("opendir");                                                       \
-      goto err;                                                                \
-    };                                                                         \
-    temp;                                                                      \
-  })
 
 #define checked_fopen(path, ...)                                               \
   ({                                                                           \
@@ -39,34 +30,6 @@
       goto err;                                                                \
     }                                                                          \
     temp;                                                                      \
-  })
-
-#define checked_openat(fd, path, oflag, ...)                                   \
-  ({                                                                           \
-    int temp = openat(fd, path, oflag, ##__VA_ARGS__);                         \
-    if (temp == -1) {                                                          \
-      perror("openat");                                                        \
-      goto err;                                                                \
-    }                                                                          \
-    temp;                                                                      \
-  })
-
-#define checked_readlinkat(fd, path, buf, bufsiz)                              \
-  ({                                                                           \
-    ssize_t temp = readlinkat(fd, path, buf, bufsiz);                          \
-    if (temp == -1) {                                                          \
-      perror("readlinkat");                                                    \
-      goto err;                                                                \
-    }                                                                          \
-    temp;                                                                      \
-  })
-
-#define checked_fstat(fd, buf)                                                 \
-  ({                                                                           \
-    if (fstat(fd, buf) != 0) {                                                 \
-      perror("fstat");                                                         \
-      goto err;                                                                \
-    }                                                                          \
   })
 
 #define checked_fchmod(fd, mode)                                               \
@@ -110,94 +73,6 @@
     }                                                                          \
     ret;                                                                       \
   })
-
-#define check_err(body)                                                        \
-  if ((ret = body) != 0)                                                       \
-    goto err;
-
-char *rwx[] = {"---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx"};
-
-__thread char modebuf[10];
-
-char *printMode(uint16_t input) {
-  memcpy(modebuf, rwx[(input >> 6) % 8], 3);
-  memcpy(modebuf + 3, rwx[(input >> 3) % 8], 3);
-  memcpy(modebuf + 6, rwx[input % 8], 3);
-  modebuf[9] = 0;
-  return modebuf;
-}
-
-#define PAD 2
-
-__thread char sizebuf[32];
-
-char *readable_fs(double size) {
-  int i = 0;
-  const char *units[] = {"B",   "KiB", "MiB", "GiB", "TiB",
-                         "PiB", "EiB", "ZiB", "YiB"};
-  while (size > 1024) {
-    size /= 1024;
-    i++;
-  }
-  sprintf(sizebuf, "%.*f %s", i, size, units[i]);
-  return sizebuf;
-}
-
-EZ_RET pack_iterator(FILE *file, int dirfd, int level) {
-  DIR *root = NULL;
-  char link_buffer[FILENAME_MAX];
-  int fd = -1;
-  EZ_RET ret = EZ_OK;
-  root = checked_fdopendir(dirfd);
-  while (1) {
-    struct dirent *dir_entry = NULL;
-    struct stat stat_buf;
-    char *name = NULL;
-    uint16_t mode;
-    dir_entry = readdir(root);
-    if (!dir_entry)
-      break;
-    name = dir_entry->d_name;
-    if (name[0] == '.')
-      continue;
-    switch (dir_entry->d_type) {
-    case DT_REG:
-      fd = checked_openat(dirfd, name, O_RDONLY);
-      checked_fstat(fd, &stat_buf);
-      mode = stat_buf.st_mode & 0777;
-      fprintf(stderr, "-%s %*s%s\n", printMode(mode), level * PAD, "", name);
-      check_err(ez_send_file(file, name, mode, fd, 0, stat_buf.st_size));
-      close(fd);
-      fd = -1;
-      break;
-    case DT_LNK:
-      checked_readlinkat(dirfd, name, link_buffer, FILENAME_MAX);
-      fprintf(stderr, "lrwxrwxrwx %*s%s -> %s\n", level * PAD, "", name,
-              link_buffer);
-      check_err(ez_push_link(file, name, link_buffer));
-      break;
-    case DT_DIR:
-      fd = checked_openat(dirfd, name, O_DIRECTORY);
-      checked_fstat(fd, &stat_buf);
-      mode = stat_buf.st_mode & 0777;
-      fprintf(stderr, "d%s %*s%s\n", printMode(mode), level * PAD, "", name);
-      check_err(ez_push_folder(file, name, mode));
-      check_err(pack_iterator(file, fd, level + 1));
-      check_err(ez_pop(file));
-      close(fd);
-      fd = -1;
-      break;
-    default:
-      break;
-    }
-  }
-  return EZ_OK;
-err:
-  printf("ret:%d\n", ret);
-  if (fd != -1)
-    close(fd);
-  return ret || EZ_ERROR_SYSCALL;
-}
 
 typedef struct fd_chain {
   int fd;
@@ -399,7 +274,7 @@ EZ_RET list_callback(void *user, EZ_TYPE type, ...) {
 }
 
 int main(int argc, char *argv[]) {
-  FILE *arch = NULL;
+  FILE *arch = NULL, *output = NULL, *input = NULL;
   fd_chain *chain = NULL;
   EZ_RET ret = EZ_OK;
   if (argc <= 2)
@@ -428,15 +303,31 @@ int main(int argc, char *argv[]) {
     arch = checked_fopen(argv[2], "rb");
     int level = 0;
     check_err(ez_unpack(arch, true, list_callback, &level));
+  } else if (strcmp(argv[1], "build") == 0) {
+    output = checked_fopen(argv[2], "wb");
+    input = checked_fopen(argv[3], "rb");
+    check_err(ez_begin(output));
+    check_err(build_pack(output, input));
+    check_err(ez_end(output));
+    fclose(output);
+    fclose(input);
+    output = NULL;
+    input = NULL;
   } else
     goto err_args;
   return 0;
+
 err_args:
-  errx(1, "%s (pack|unpack|test) pack dir", argv[0]);
+  errx(1, "%s (pack|unpack|test|build) pack dir", argv[0]);
+
 err:
   fd_chain_free(chain);
   if (arch)
     fclose(arch);
+  if (output)
+    fclose(output);
+  if (input)
+    fclose(input);
   fprintf(stderr, "%s\n", ez_error_string(ret));
   return ret ?: -1;
 }

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.13)
 
 SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 SET(BUILD_SHARED_LIBS OFF)
-SET(CMAKE_EXE_LINKER_FLAGS "-static")
+SET(CMAKE_EXE_LINKER_FLAGS "-static -Wl,--gc-sections -s")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-switch -Wno-unused-command-line-argument")
 
 include(ExternalProject)
@@ -20,10 +20,9 @@ ExternalProject_Get_property(libfuse INSTALL_DIR)
 set(FUSE_DIR ${INSTALL_DIR})
 unset(INSTALL_DIR)
 
-add_library(ezpak ezpak.c ezpak.h)
-add_library(payload payload.c payload.h)
+add_library(ezpak ezpak.c ezutils.c)
 
-add_executable(ezio ezio.c)
+add_executable(ezio ezio.c ezutils.c)
 target_link_libraries(ezio ezpak)
 
 add_library(fuse_support fuse_support.c fuse_support.h)
@@ -32,15 +31,16 @@ target_link_directories(fuse_support INTERFACE ${FUSE_DIR}/lib)
 target_link_libraries(fuse_support INTERFACE fuse3)
 target_include_directories(fuse_support PRIVATE ${FUSE_DIR}/include)
 
-add_executable(stub stub.c parse_arg.c envsolver.c)
-target_link_libraries(stub ezpak payload fuse_support)
+add_executable(stub stub.c parse_arg.c envsolver.c payload.c)
+target_link_libraries(stub ezpak fuse_support)
 
-add_executable(ezbin-zero ezbin.c)
-target_link_libraries(ezbin-zero ezpak payload)
+add_executable(ezbin-zero ezbin.c payload.c)
+target_link_libraries(ezbin-zero ezpak)
 
 add_custom_command(
   OUTPUT ezbin
   POST_BUILD
+  # COMMAND strip -s -R .comment -R .gnu.version --strip-unneeded stub
   COMMAND cat ezbin-zero stub > ezbin
   COMMAND chmod +x ezbin
   MAIN_DEPENDENCY ezbin-zero
