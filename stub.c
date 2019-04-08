@@ -113,6 +113,14 @@
     }                                                                          \
   })
 
+#define checked_mkfifo(...)                                                    \
+  ({                                                                           \
+    if (mkfifo(__VA_ARGS__) != 0) {                                            \
+      perror("mkfifo");                                                        \
+      goto err;                                                                \
+    }                                                                          \
+  })
+
 #define checked_mount(...)                                                     \
   ({                                                                           \
     if (mount(__VA_ARGS__) != 0) {                                             \
@@ -421,6 +429,15 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       assert(strlen(val) != 0);
       char *solved = envsolver(val);
       checked_freopen(solved, "r", stdin);
+    } else if (STREQ(key, "mkfifo")) {
+      assert(strlen(val) != 0);
+      char *solved = envsolver(val);
+      checked_mkfifo(solved, 0700);
+    } else if (STREQ(key, "touch")) {
+      assert(strlen(val) != 0);
+      char *solved = envsolver(val);
+      fd = checked_open(solved, O_CREAT | O_WRONLY, 0755);
+      close(fd);
     } else if (STREQ(key, "force-exit")) {
       _exit(0);
     } else if (STREQ(key, "include")) {
