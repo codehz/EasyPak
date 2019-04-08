@@ -410,6 +410,7 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
         return EZ_ERROR_CORRUPT;
     } else if (STREQ(key, "vfork")) {
       pid_t pid = vfork();
+      prctl(PR_SET_PDEATHSIG, SIGINT);
       if (pid < 0) {
         perror("execv");
         exit(254);
