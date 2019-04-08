@@ -172,6 +172,7 @@ typedef struct pkstatus {
   pkstrategy overwrite;
   pid_t lastpid;
   char *fuse_mode;
+  void *current_mapped;
   file_tree *ft_root, *ft_current;
   bool ft_enter;
 } pkstatus;
@@ -249,6 +250,7 @@ static void mkdir_p(const char *dir) {
 }
 
 static char **g_argv;
+static char *main_mapped;
 
 EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
   pkstatus *status = user;
@@ -261,7 +263,8 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     if (status->fuse_mode) {
       status->ft_current = NULL;
       status->ft_enter = false;
-      setup_fuse(status->fuse_mode, status->ft_root);
+      setup_fuse(status->fuse_mode, status->ft_root,
+                 status->current_mapped ?: main_mapped);
       free(status->fuse_mode);
       status->ft_root = NULL;
       status->fuse_mode = NULL;
@@ -515,7 +518,8 @@ int main(int argc, char *argv[]) {
 
   file = getpayload(NULL);
   fstat(fileno(file), &sb);
-  mapped = mmap(NULL, sb.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE, fileno(file), 0);
+  main_mapped = mmap(NULL, sb.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE,
+                     fileno(file), 0);
   if (!file)
     goto err;
   if (geteuid() != 0) {

@@ -15,7 +15,7 @@
 #include <threads.h>
 #include <unistd.h>
 
-char *mapped;
+static char *mapped;
 static file_tree *current_tree;
 static int event;
 
@@ -228,13 +228,14 @@ static struct fuse_operations my_oper = {
     .access = my_access,
 };
 
-int setup_fuse(char *target, file_tree *tree) {
+int setup_fuse(char *target, file_tree *tree, void *mapped_) {
   char *args[] = {"easypak", target, "-f", "-o", "allow_other", NULL};
   event = eventfd(0, 0);
   pid_t pid = fork();
   if (pid < 0)
     return pid;
   if (pid == 0) {
+    mapped = mapped_;
     char *prname;
     asprintf(&prname, "FUSE(%s)", target);
     signal(SIGINT, SIG_IGN);

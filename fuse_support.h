@@ -23,8 +23,6 @@ typedef struct file_tree {
   };
 } file_tree;
 
-extern char *mapped;
-
-int setup_fuse(char *target, file_tree *tree);
+int setup_fuse(char *target, file_tree *tree, void *mapped);
 
 unsigned long hash(char const *str);
