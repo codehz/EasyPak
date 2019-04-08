@@ -52,4 +52,5 @@ exec-passthru /usr/bin/endpoint
 - `fuse target`: use fuse to target directory
 - `env name=value`: set environment (overwrite)
 - `option name=value`: set enivironment (ignore if set already)
-- `vfork`: start a background task (end with any exec/exec-passthru)
+- `vfork`: start a background task (end with any exec/exec-passthru/force-exit)
+- `force-exit`: exit process immediately

@@ -407,6 +407,8 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       assert(strlen(val) != 0);
       char *solved = envsolver(val);
       checked_freopen(solved, "r", stdin);
+    } else if (STREQ(key, "force-exit")) {
+      _exit(0);
     } else {
       fprintf(stderr, "unsupported: %s\n", key);
       return EZ_ERROR_CORRUPT;
