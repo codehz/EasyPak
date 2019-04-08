@@ -54,3 +54,4 @@ exec-passthru /usr/bin/endpoint
 - `option name=value`: set enivironment (ignore if set already)
 - `vfork`: start a background task (end with any exec/exec-passthru/force-exit)
 - `force-exit`: exit process immediately
+- `include xxx.ezpak`: include another ezpak file (build with ezio)

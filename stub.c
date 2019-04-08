@@ -252,9 +252,13 @@ static void mkdir_p(const char *dir) {
 static char **g_argv;
 static char *main_mapped;
 
+EZ_RET my_callback(void *user, EZ_TYPE type, ...);
+
 EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
+  EZ_RET ret = EZ_OK;
   pkstatus *status = user;
   char *buffer = NULL;
+  FILE *tempfile = NULL;
   int fd = -1;
   switch (type) {
   case EZ_T_MAN: {
@@ -409,6 +413,19 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       checked_freopen(solved, "r", stdin);
     } else if (STREQ(key, "force-exit")) {
       _exit(0);
+    } else if (STREQ(key, "include")) {
+      char *solved = envsolver(val);
+      tempfile = checked_fopen(solved, "r");
+      struct stat stbuf;
+      fstat(fileno(tempfile), &stbuf);
+      void *temp = status->current_mapped;
+      status->current_mapped =
+          mmap(NULL, stbuf.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE,
+               fileno(tempfile), 0);
+      check_err(ez_unpack(tempfile, true, my_callback, status));
+      status->current_mapped = temp;
+      fclose(tempfile);
+      tempfile = NULL;
     } else {
       fprintf(stderr, "unsupported: %s\n", key);
       return EZ_ERROR_CORRUPT;
@@ -497,7 +514,9 @@ err:
   free(buffer);
   if (fd != -1)
     close(fd);
-  return EZ_ERROR_SYSCALL;
+  if (tempfile)
+    fclose(tempfile);
+  return ret ?: EZ_ERROR_SYSCALL;
 }
 
 EZ_RET my_callback(void *user, EZ_TYPE type, ...) {
