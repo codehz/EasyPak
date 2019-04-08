@@ -5,7 +5,7 @@ workflow "Make release" {
 
 action "codehz/arch-cmake-builder@master" {
   uses = "codehz/arch-cmake-builder@master"
-  args = "CC=musl-clang"
+  args = "CC=musl-gcc"
 }
 
 action "JasonEtco/upload-to-release@master" {
