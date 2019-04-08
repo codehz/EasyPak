@@ -47,11 +47,14 @@ exec-passthru /usr/bin/endpoint
 - `exec cmdline`: execute command
 - `exec-background cmdline`: execute command in background
 - `wait`: wait last *background* task to exit
+- `waitstop`: wait last *background* task to stopped
 - `waitdir dir`: wait target dir to be changed
+- `waitfile file`: wait target file to be exists
 - `exec-passthru executable`: execute command but passthrough all arguments to it
 - `fuse target`: use fuse to target directory
 - `env name=value`: set environment (overwrite)
 - `option name=value`: set enivironment (ignore if set already)
 - `vfork`: start a background task (end with any exec/exec-passthru/force-exit)
+- `fork`: start a background task (end with any exec/exec-passthru/force-exit)
 - `force-exit`: exit process immediately
 - `include xxx.ezpak`: include another ezpak file (build with ezio)
