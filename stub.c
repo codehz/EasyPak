@@ -28,6 +28,7 @@
   ({                                                                           \
     FILE *temp = fopen(path, ##__VA_ARGS__);                                   \
     if (temp == NULL) {                                                        \
+      fprintf(stderr, "Failed to open %s\n", path);                            \
       perror("fopen");                                                         \
       goto err;                                                                \
     }                                                                          \
@@ -38,6 +39,7 @@
   ({                                                                           \
     int fd = open(path, ##__VA_ARGS__);                                        \
     if (fd == -1) {                                                            \
+      fprintf(stderr, "Failed to open %s\n", path);                            \
       perror("open");                                                          \
       goto err;                                                                \
     }                                                                          \
@@ -64,10 +66,11 @@
     ret;                                                                       \
   })
 
-#define checked_freopen(str, mode, stream)                                     \
+#define checked_freopen(path, mode, stream)                                    \
   ({                                                                           \
-    FILE *ret = freopen(str, mode, stream);                                    \
+    FILE *ret = freopen(path, mode, stream);                                   \
     if (!ret) {                                                                \
+      fprintf(stderr, "Failed to open %s\n", path);                            \
       perror("freopen");                                                       \
       return EZ_ERROR_SYSCALL;                                                 \
     }                                                                          \
@@ -121,6 +124,7 @@
 #define checked_mkdir(path, mode)                                              \
   ({                                                                           \
     if (mkdir(path, mode) != 0) {                                              \
+      fprintf(stderr, "failed to mkdir %s\n", path);                           \
       perror("mkdir");                                                         \
       goto err;                                                                \
     }                                                                          \
@@ -129,6 +133,7 @@
 #define checked_chdir(path)                                                    \
   ({                                                                           \
     if (chdir(path) != 0) {                                                    \
+      fprintf(stderr, "failed to chdir to %s\n", path);                        \
       perror("chdir");                                                         \
       goto err;                                                                \
     }                                                                          \
@@ -145,6 +150,7 @@
 #define checked_chroot(path)                                                   \
   ({                                                                           \
     if (chroot(path) != 0) {                                                   \
+      fprintf(stderr, "failed to chroot to %s\n", path);                       \
       perror("chroot");                                                        \
       goto err;                                                                \
     }                                                                          \
@@ -153,6 +159,8 @@
 #define checked_pivot_root(new_root, putold)                                   \
   ({                                                                           \
     if (pivot_root(new_root, putold) != 0) {                                   \
+      fprintf(stderr, "failed to pivot root to %s (old: %s)\n", new_root,      \
+              putold);                                                         \
       perror("pivot_root");                                                    \
       goto err;                                                                \
     }                                                                          \
@@ -250,9 +258,17 @@ static void mkdir_p(const char *dir) {
 }
 
 static char **g_argv;
-static char *main_mapped;
 
 EZ_RET my_callback(void *user, EZ_TYPE type, ...);
+
+void handle_fuse(pkstatus *status) {
+  status->ft_current = NULL;
+  status->ft_enter = false;
+  setup_fuse(status->fuse_mode, status->ft_root, status->current_mapped);
+  free(status->fuse_mode);
+  status->ft_root = NULL;
+  status->fuse_mode = NULL;
+}
 
 EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
   EZ_RET ret = EZ_OK;
@@ -264,14 +280,8 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
   case EZ_T_MAN: {
     char const *key = va_arg(list, char const *);
     char const *val = va_arg(list, char const *);
-    if (status->fuse_mode) {
-      status->ft_current = NULL;
-      status->ft_enter = false;
-      setup_fuse(status->fuse_mode, status->ft_root,
-                 status->current_mapped ?: main_mapped);
-      free(status->fuse_mode);
-      status->ft_root = NULL;
-      status->fuse_mode = NULL;
+    if (status->fuse_mode && !STREQ(key, "include")) {
+      handle_fuse(status);
     }
     if (STREQ(key, "print")) {
       printf("%s\n", val);
@@ -423,6 +433,10 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
           mmap(NULL, stbuf.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE,
                fileno(tempfile), 0);
       check_err(ez_unpack(tempfile, true, my_callback, status));
+      if (status->fuse_mode) {
+        handle_fuse(status);
+      }
+      munmap(status->current_mapped, stbuf.st_size);
       status->current_mapped = temp;
       fclose(tempfile);
       tempfile = NULL;
@@ -539,8 +553,8 @@ int main(int argc, char *argv[]) {
 
   file = getpayload(NULL);
   fstat(fileno(file), &sb);
-  main_mapped = mmap(NULL, sb.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE,
-                     fileno(file), 0);
+  void *mapped = mmap(NULL, sb.st_size, PROT_READ, MAP_SHARED | MAP_NORESERVE,
+                      fileno(file), 0);
   if (!file)
     goto err;
   if (geteuid() != 0) {
@@ -552,6 +566,7 @@ int main(int argc, char *argv[]) {
   }
   checked_unshare(CLONE_NEWNS);
   pkstatus status = {0};
+  status.current_mapped = mapped;
   check_err(ez_unpack(file, true, my_callback, &status));
   return 0;
 err:
