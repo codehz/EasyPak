@@ -7,6 +7,7 @@
 #include "payload.h"
 #include <assert.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <sched.h>
 #include <signal.h>
 #include <stdio.h>
@@ -16,6 +17,7 @@
 #include <sys/mman.h>
 #include <sys/mount.h>
 #include <sys/prctl.h>
+#include <sys/resource.h>
 #include <sys/sendfile.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -187,6 +189,7 @@ typedef enum pkstrategy {
 typedef struct pkstatus {
   pkstrategy overwrite;
   pid_t lastpid;
+  int fork_level;
   char *fuse_mode;
   void *current_mapped;
   file_tree *ft_root, *ft_current;
@@ -284,10 +287,23 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
   char *buffer = NULL;
   FILE *tempfile = NULL;
   int fd = -1;
+  if (type != EZ_T_MAN && status->fork_level) {
+    printf("skipped\n");
+    return EZ_OK;
+  }
   switch (type) {
   case EZ_T_MAN: {
     char const *key = va_arg(list, char const *);
     char const *val = va_arg(list, char const *);
+    if (status->fork_level) {
+      if (STREQ(key, "exec") || STREQ(key, "exec-passthru") ||
+          STREQ(key, "exec-passthru") || STREQ(key, "force-exit")) {
+        status->fork_level--;
+      } else if (STREQ(key, "fork") || STREQ(key, "fork")) {
+        status->fork_level++;
+      }
+      return EZ_OK;
+    }
     if (status->fuse_mode && !STREQ(key, "include")) {
       handle_fuse(status);
     }
@@ -367,6 +383,9 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       status->lastpid = pid;
     } else if (STREQ(key, "wait")) {
       waitpid(status->lastpid, NULL, 0);
+    } else if (STREQ(key, "waitstop")) {
+      waitpid(status->lastpid, NULL, WUNTRACED);
+      kill(status->lastpid, SIGCONT);
     } else if (STREQ(key, "waitdir")) {
       int ifd = inotify_init();
       char *solved = envsolver(val);
@@ -379,6 +398,16 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
         exit(254);
       }
       close(ifd);
+    } else if (STREQ(key, "waitfile")) {
+      char *solved = envsolver(val);
+      setpriority(PRIO_PROCESS, getpid(), 20);
+      while (1) {
+        if (access(solved, F_OK) == 0)
+          break;
+        sched_yield();
+      }
+      free(solved);
+      setpriority(PRIO_PROCESS, getpid(), 0);
     } else if (STREQ(key, "exec-passthru")) {
       char *solved = envsolver(val);
       execv(solved, g_argv);
@@ -399,6 +428,7 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
         setenv(skey, sval, 1);
       else
         unsetenv(skey);
+      free(solved);
     } else if (STREQ(key, "option")) {
       assert(strlen(val) != 0);
       char *solved = envsolver(val);
@@ -408,42 +438,62 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
         setenv(skey, sval, 0);
       else
         return EZ_ERROR_CORRUPT;
+      free(solved);
     } else if (STREQ(key, "vfork")) {
       pid_t pid = vfork();
-      prctl(PR_SET_PDEATHSIG, SIGINT);
       if (pid < 0) {
         perror("execv");
         exit(254);
       }
       if (pid) {
         status->lastpid = pid;
+      } else {
+        prctl(PR_SET_PDEATHSIG, SIGINT);
+      }
+    } else if (STREQ(key, "fork")) {
+      pid_t pid = fork();
+      if (pid < 0) {
+        perror("execv");
+        exit(254);
+      }
+      if (pid) {
+        status->lastpid = pid;
+        status->fork_level = 1;
+      } else {
+        prctl(PR_SET_PDEATHSIG, SIGINT);
       }
     } else if (STREQ(key, "stdout")) {
       assert(strlen(val) != 0);
       char *solved = envsolver(val);
       checked_freopen(solved, "a", stdout);
+      free(solved);
     } else if (STREQ(key, "stderr")) {
       assert(strlen(val) != 0);
       char *solved = envsolver(val);
       checked_freopen(solved, "a", stderr);
+      free(solved);
     } else if (STREQ(key, "stdin")) {
       assert(strlen(val) != 0);
       char *solved = envsolver(val);
       checked_freopen(solved, "r", stdin);
+      free(solved);
     } else if (STREQ(key, "mkfifo")) {
       assert(strlen(val) != 0);
       char *solved = envsolver(val);
       checked_mkfifo(solved, 0700);
+      free(solved);
     } else if (STREQ(key, "touch")) {
       assert(strlen(val) != 0);
       char *solved = envsolver(val);
       fd = checked_open(solved, O_CREAT | O_WRONLY, 0755);
       close(fd);
+      free(solved);
     } else if (STREQ(key, "force-exit")) {
       _exit(0);
     } else if (STREQ(key, "include")) {
       char *solved = envsolver(val);
       tempfile = checked_fopen(solved, "r");
+      free(solved);
       struct stat stbuf;
       fstat(fileno(tempfile), &stbuf);
       void *temp = status->current_mapped;
