@@ -381,6 +381,42 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
         exit(254);
       }
       status->lastpid = pid;
+    } else if (STREQ(key, "run")) {
+      pid_t pid = fork();
+      if (pid < 0) {
+        perror("execv");
+        exit(254);
+      }
+      if (pid == 0) {
+        prctl(PR_SET_PDEATHSIG, SIGINT);
+        char *solved = envsolver(val);
+        char **args = parse_arg(solved);
+        execv(args[0], args);
+        perror("execv");
+        exit(254);
+      }
+      waitpid(pid, NULL, 0);
+    } else if (STREQ(key, "checked-run")) {
+      pid_t pid = fork();
+      if (pid < 0) {
+        perror("execv");
+        exit(254);
+      }
+      char *solved = envsolver(val);
+      if (pid == 0) {
+        prctl(PR_SET_PDEATHSIG, SIGINT);
+        char **args = parse_arg(solved);
+        execv(args[0], args);
+        perror("execv");
+        exit(254);
+      }
+      int status;
+      waitpid(pid, &status, 0);
+      if (status) {
+        fprintf(stderr, "Failed to execute '%s'\n", solved);
+        goto err;
+      }
+      free(solved);
     } else if (STREQ(key, "wait")) {
       waitpid(status->lastpid, NULL, 0);
     } else if (STREQ(key, "waitstop")) {

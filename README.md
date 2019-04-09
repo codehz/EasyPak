@@ -46,6 +46,8 @@ exec-passthru /usr/bin/endpoint
 - `bind src:target`: just like `mount --bind` command
 - `exec cmdline`: execute command
 - `exec-background cmdline`: execute command in background
+- `run cmdline`: execute command in background and wait
+- `checked-run cmdline`: execute command in background and check the result
 - `wait`: wait last *background* task to exit
 - `waitstop`: wait last *background* task to stopped
 - `waitdir dir`: wait target dir to be changed
