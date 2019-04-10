@@ -565,6 +565,51 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       pidfile_write(fh);
     } else if (STREQ(key, "pause")) {
       pause();
+    } else if (STREQ(key, "checkfile")) {
+      char *solved = envsolver(val);
+      if (access(solved, F_OK) != 0) {
+        fprintf(stderr, "File '%s' not found!\n", solved);
+        free(solved);
+        goto err;
+      }
+      free(solved);
+    } else if (STREQ(key, "findexe")) {
+      char *solved = envsolver(val);
+      char *saved = NULL;
+      char *var = strtok_r(solved, "=", &saved);
+      char *cmd = strtok_r(NULL, "=", &saved);
+      if (!cmd) {
+        fprintf(stderr, "Format error!\n");
+        return EZ_ERROR_CORRUPT;
+      }
+      char *PATH = strdup(getenv("PATH"));
+      saved = NULL;
+      char *found = NULL;
+      for (char *temp = PATH;; temp = NULL) {
+        char *dir = strtok_r(temp, ":", &saved);
+        if (!dir) {
+          fprintf(stderr, "Executable file '%s' not found!\n", cmd);
+          free(solved);
+          free(PATH);
+          goto err;
+        }
+        fd = open(dir, O_DIRECTORY);
+        if (faccessat(fd, cmd, X_OK, 0) == 0) {
+          close(fd);
+          fd = -1;
+          found = dir;
+          break;
+        }
+        errno = 0;
+        close(fd);
+        fd = -1;
+      }
+      char *buffer = NULL;
+      asprintf(&buffer, "%s/%s", found, cmd);
+      setenv(var, buffer, true);
+      free(buffer);
+      free(solved);
+      free(PATH);
     } else {
       fprintf(stderr, "unsupported: %s\n", key);
       return EZ_ERROR_CORRUPT;
