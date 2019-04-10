@@ -48,8 +48,8 @@ exec-passthru /usr/bin/endpoint
 - `exec-background cmdline`: execute command in background
 - `run cmdline`: execute command in background and wait
 - `checked-run cmdline`: execute command in background and check the result
-- `wait`: wait last *background* task to exit
-- `waitstop`: wait last *background* task to stopped
+- `wait`: wait last _background_ task to exit
+- `waitstop`: wait last _background_ task to stopped
 - `waitdir dir`: wait target dir to be changed
 - `waitfile file`: wait target file to be exists
 - `exec-passthru executable`: execute command but passthrough all arguments to it
@@ -60,3 +60,5 @@ exec-passthru /usr/bin/endpoint
 - `fork`: start a background task (end with any exec/exec-passthru/force-exit)
 - `force-exit`: exit process immediately
 - `include xxx.ezpak`: include another ezpak file (build with ezio)
+- `daemon`: run as daemon
+- `pidfile`: create pidfile (failed if locked)

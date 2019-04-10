@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 SET(BUILD_SHARED_LIBS OFF)
 SET(CMAKE_EXE_LINKER_FLAGS "-static -Os -Wl,--gc-sections,-flto -s")
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -Wall -Wno-switch -Wno-unused-command-line-argument -flto -ffunction-sections -fdata-sections")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Os -Wall -Wno-switch -flto -ffunction-sections -fdata-sections")
 SET(CMAKE_AR "gcc-ar")
 SET(CMAKE_NM "gcc-nm")
 SET(CMAKE_RANLIB "gcc-ranlib")
@@ -23,6 +23,8 @@ ExternalProject_Get_property(libfuse INSTALL_DIR)
 set(FUSE_DIR ${INSTALL_DIR})
 unset(INSTALL_DIR)
 
+add_library(libutil libutil/flopen.c libutil/pidfile.c)
+
 add_library(ezpak ezpak.c ezutils.c)
 
 add_executable(ezio ezio.c ezutils.c)
@@ -35,7 +37,7 @@ target_link_libraries(fuse_support INTERFACE fuse3)
 target_include_directories(fuse_support PRIVATE ${FUSE_DIR}/include)
 
 add_executable(stub stub.c parse_arg.c envsolver.c payload.c)
-target_link_libraries(stub ezpak fuse_support)
+target_link_libraries(stub ezpak fuse_support libutil)
 
 add_executable(ezbin-zero ezbin.c payload.c)
 target_link_libraries(ezbin-zero ezpak)

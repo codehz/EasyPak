@@ -3,9 +3,11 @@
 #include "envsolver.h"
 #include "ezpak.h"
 #include "fuse_support.h"
+#include "libutil/libutil.h"
 #include "parse_arg.h"
 #include "payload.h"
 #include <assert.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
 #include <sched.h>
@@ -544,6 +546,23 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       status->current_mapped = temp;
       fclose(tempfile);
       tempfile = NULL;
+    } else if (STREQ(key, "daemon")) {
+      if (daemon(true, false) == -1) {
+        fprintf(stderr, "Failed to daemonize\n");
+        return EZ_ERROR_SYSCALL;
+      }
+    } else if (STREQ(key, "pidfile")) {
+      char *solved = envsolver(val);
+      pid_t exists;
+      struct pidfh *fh = pidfile_open(solved, 0700, NULL);
+      if (!fh) {
+        if (errno == EEXIST)
+          fprintf(stderr, "Cannot create pid file, PID: %d\n", exists);
+        else
+          perror("Cannot create pid file");
+        return EZ_ERROR_SYSCALL;
+      }
+      pidfile_write(fh);
     } else {
       fprintf(stderr, "unsupported: %s\n", key);
       return EZ_ERROR_CORRUPT;
