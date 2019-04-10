@@ -64,4 +64,4 @@ exec-passthru /usr/bin/endpoint
 - `pidfile`: create pidfile (failed if locked)
 - `pause`: wait for signal
 - `checkfile target`: check target file exists
-- `findexe env:cmd`: find command in PATH and set to env variable
+- `findexe env=cmd`: find command in PATH and set to env variable
