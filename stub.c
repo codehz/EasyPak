@@ -563,6 +563,8 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
         return EZ_ERROR_SYSCALL;
       }
       pidfile_write(fh);
+    } else if (STREQ(key, "pause")) {
+      pause();
     } else {
       fprintf(stderr, "unsupported: %s\n", key);
       return EZ_ERROR_CORRUPT;

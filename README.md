@@ -62,3 +62,4 @@ exec-passthru /usr/bin/endpoint
 - `include xxx.ezpak`: include another ezpak file (build with ezio)
 - `daemon`: run as daemon
 - `pidfile`: create pidfile (failed if locked)
+- `pause`: wait for signal
