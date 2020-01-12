@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <ftw.h>
 #include <libgen.h>
 #include <sched.h>
 #include <signal.h>
@@ -275,12 +276,24 @@ static char **g_argv;
 EZ_RET my_callback(void *user, EZ_TYPE type, ...);
 
 void handle_fuse(pkstatus *status) {
+#ifdef FuseSupport
   status->ft_current = NULL;
   status->ft_enter = false;
   setup_fuse(status->fuse_mode, status->ft_root, status->current_mapped);
   free(status->fuse_mode);
   status->ft_root = NULL;
   status->fuse_mode = NULL;
+#else
+  abort();
+#endif
+}
+
+static int delete_file_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) {
+  int rv = remove(fpath);
+  if (rv) {
+    perror(fpath);
+  }
+  return rv;
 }
 
 EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
@@ -610,6 +623,50 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
       free(buffer);
       free(solved);
       free(PATH);
+    } else if (STREQ(key, "hostname")) {
+      char *solved = envsolver(val);
+      int ret = sethostname(solved, strlen(solved));
+      free(solved);
+      if (ret == -1) {
+        fprintf(stderr, "Failed to set hostname: %s\n", strerror(errno));
+        return EZ_ERROR_SYSCALL;
+      }
+    } else if (STREQ(key, "delete-self")) {
+      char selfpath[256] = {0};
+      ssize_t len = readlink("/proc/self/exe", selfpath, sizeof selfpath);
+      selfpath[len] = 0;
+      remove(selfpath);
+    } else if (STREQ(key, "delete")) {
+      char *solved = envsolver(val);
+      struct stat path_stat;
+      stat(solved, &path_stat);
+      if (S_ISDIR(path_stat.st_mode)) {
+        nftw(solved, delete_file_cb, 64, FTW_DEPTH | FTW_PHYS);
+      } else {
+        remove(solved);
+      }
+      free(solved);
+    } else if (STREQ(key, "umount")) {
+      char *solved = envsolver(val);
+      if(umount(solved) == -1) {
+        fprintf(stderr, "Failed to umount %s: %s\n", solved, strerror(errno));
+        free(solved);
+        return EZ_ERROR_SYSCALL;
+      }
+      free(solved);
+    } else if (STREQ(key, "add-path")) {
+      char *solved = envsolver(val);
+      char *real = realpath(solved, NULL);
+      char *old_PATH = getenv("PATH");
+      char *new_PATH = malloc(strlen(old_PATH) + strlen(real) + 2);
+      new_PATH[0] = 0;
+      strcat(new_PATH, real);
+      strcat(new_PATH, ":");
+      strcat(new_PATH, old_PATH);
+      setenv("PATH", new_PATH, 1);
+      free(new_PATH);
+      free(real);
+      free(solved);
     } else {
       fprintf(stderr, "unsupported: %s\n", key);
       return EZ_ERROR_CORRUPT;
@@ -627,11 +684,15 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     off_t *off = va_arg(list, off_t *);
     size_t size = va_arg(list, size_t);
     if (status->fuse_mode) {
+#ifdef FuseSupport
       make_ft_node(node, key, FILE_REGULAR);
       node->mode = mode;
       node->offset = *off;
       node->length = size;
       insert_ft_node(status, node);
+#else
+  abort();
+#endif
     } else {
       if (access(key, F_OK) == 0) {
         if (status->overwrite == STRATEGY_SKIP)
@@ -653,9 +714,13 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     char const *key = va_arg(list, char const *);
     char const *val = va_arg(list, char const *);
     if (status->fuse_mode) {
+#ifdef FuseSupport
       make_ft_node(node, key, FILE_LINK);
       node->link = strdup(val);
       insert_ft_node(status, node);
+#else
+      abort();
+#endif
     } else {
       checked_symlink(val, key);
     }
@@ -665,10 +730,14 @@ EZ_RET my_callback_v(void *user, EZ_TYPE type, va_list list) {
     char const *key = va_arg(list, char const *);
     uint16_t mode = va_arg(list, int);
     if (status->fuse_mode) {
+#ifdef FuseSupport
       make_ft_node(node, key, FILE_FOLDER);
       node->mode = mode;
       insert_ft_node(status, node);
       status->ft_enter = true;
+#else
+      abort();
+#endif
     } else {
       mkdir(key, mode);
       checked_chdir(key);
@@ -734,7 +803,7 @@ int main(int argc, char *argv[]) {
     map_to_root(uid, "/proc/self/uid_map");
     map_to_root(gid, "/proc/self/gid_map");
   }
-  checked_unshare(CLONE_NEWNS);
+  checked_unshare(CLONE_NEWNS | CLONE_NEWUTS);
   pkstatus status = {0};
   status.current_mapped = mapped;
   check_err(ez_unpack(file, true, my_callback, &status));

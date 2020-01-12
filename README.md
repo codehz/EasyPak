@@ -65,3 +65,8 @@ exec-passthru /usr/bin/endpoint
 - `pause`: wait for signal
 - `checkfile target`: check target file exists
 - `findexe env=cmd`: find command in PATH and set to env variable
+- `delete-self`: delete self
+- `hostname name`: set hostname
+- `delete path`: delete path recursive
+- `umount path`: umount path
+- `add-path path`: append path to $PATH

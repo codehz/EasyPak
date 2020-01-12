@@ -1,4 +1,7 @@
+project(EasyPak)
 cmake_minimum_required(VERSION 3.13)
+
+option(FuseSupport "fuse" OFF)
 
 SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 SET(BUILD_SHARED_LIBS OFF)
@@ -34,10 +37,15 @@ add_library(fuse_support fuse_support.c fuse_support.h)
 add_dependencies(fuse_support libfuse)
 target_link_directories(fuse_support INTERFACE ${FUSE_DIR}/lib)
 target_link_libraries(fuse_support INTERFACE fuse3)
+target_compile_definitions(fuse_support INTERFACE FuseSupport)
 target_include_directories(fuse_support PRIVATE ${FUSE_DIR}/include)
 
 add_executable(stub stub.c parse_arg.c envsolver.c payload.c)
-target_link_libraries(stub ezpak fuse_support libutil)
+if (FuseSupport)
+  target_link_libraries(stub ezpak fuse_support libutil)
+else()
+  target_link_libraries(stub ezpak libutil)
+endif()
 
 add_executable(ezbin-zero ezbin.c payload.c)
 target_link_libraries(ezbin-zero ezpak)

@@ -34,6 +34,7 @@ EZ_RET pack_iterator(FILE *file, int dirfd, int level) {
     struct dirent *dir_entry = NULL;
     struct stat stat_buf;
     char *name = NULL;
+    size_t linklen = 0;
     uint16_t mode;
     dir_entry = readdir(root);
     if (!dir_entry)
@@ -52,7 +53,8 @@ EZ_RET pack_iterator(FILE *file, int dirfd, int level) {
       fd = -1;
       break;
     case DT_LNK:
-      checked_readlinkat(dirfd, name, link_buffer, FILENAME_MAX);
+      linklen = checked_readlinkat(dirfd, name, link_buffer, FILENAME_MAX);
+      link_buffer[linklen] = 0;
       fprintf(stderr, "lrwxrwxrwx %*s%s -> %s\n", level * PAD, "", name,
               link_buffer);
       check_err(ez_push_link(file, name, link_buffer));
