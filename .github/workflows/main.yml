@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: Archlinux CMake builder
-      uses: codehz/arch-cmake-builder@v0.1.3
+      uses: codehz/arch-cmake-builder@v0.2
     - name: Upload artifact
       uses: actions/upload-artifact@v1.0.0
       with:
