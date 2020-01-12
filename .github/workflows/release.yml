@@ -17,7 +17,11 @@ jobs:
       uses: yakuhzi/action-release@v1.2.0
       with:
         file: build/ezio
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - name: Action Release
       uses: yakuhzi/action-release@v1.2.0
       with:
         file: build/ezpak
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
