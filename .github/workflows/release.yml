@@ -1,0 +1,23 @@
+name: CI - release
+
+on: [release]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Archlinux CMake builder
+      uses: codehz/arch-cmake-builder@v0.2
+      with:
+        args: "CC=musl-gcc"
+    - name: Action Release
+      uses: yakuhzi/action-release@v1.2.0
+      with:
+        file: build/ezio
+    - name: Action Release
+      uses: yakuhzi/action-release@v1.2.0
+      with:
+        file: build/ezpak
